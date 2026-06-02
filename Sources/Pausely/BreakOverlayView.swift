@@ -86,12 +86,22 @@ struct TimerCountdownView: View {
     @ObservedObject var breakManager: BreakManager
     
     var body: some View {
-        Text(timeFormatted(breakManager.timeRemaining))
+        let timerText = Text(timeFormatted(breakManager.timeRemaining))
             .font(.system(size: 84, weight: .bold, design: .rounded))
             .monospacedDigit()
-            .foregroundColor(Color(red: 0.72, green: 0.88, blue: 1.0))
             .contentTransition(.numericText(countsDown: true))
             .animation(.easeOut(duration: 0.4), value: breakManager.timeRemaining)
+        
+        timerText
+            .foregroundStyle(
+                .linearGradient(
+                    colors: [.white, .white.opacity(0.4)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
+            .shadow(color: .white.opacity(0.3), radius: 1, x: 0, y: 1) // Inner highlight feel
     }
     
     private func timeFormatted(_ totalSeconds: Int) -> String {
