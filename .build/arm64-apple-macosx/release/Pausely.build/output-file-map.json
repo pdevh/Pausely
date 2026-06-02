@@ -1,0 +1,43 @@
+{
+  "": {
+    "dependencies": "/Users/philipp/Coding/Pausely/.build/arm64-apple-macosx/release/Pausely.build/Pausely.d",
+    "object": "/Users/philipp/Coding/Pausely/.build/arm64-apple-macosx/release/Pausely.build/Pausely.o",
+    "swift-dependencies": "/Users/philipp/Coding/Pausely/.build/arm64-apple-macosx/release/Pausely.build/primary.swiftdeps"
+  },
+  "/Users/philipp/Coding/Pausely/Sources/Pausely/BreakManager.swift": {
+    "object": "/Users/philipp/Coding/Pausely/.build/arm64-apple-macosx/release/Pausely.build/BreakManager.swift.o",
+    "swiftmodule": "/Users/philipp/Coding/Pausely/.build/arm64-apple-macosx/release/Pausely.build/BreakManager~partial.swiftmodule",
+    "swift-dependencies": "/Users/philipp/Coding/Pausely/.build/arm64-apple-macosx/release/Pausely.build/BreakManager.swiftdeps",
+    "diagnostics": "/Users/philipp/Coding/Pausely/.build/arm64-apple-macosx/release/Pausely.build/BreakManager.dia"
+  },
+  "/Users/philipp/Coding/Pausely/Sources/Pausely/BreakOverlayView.swift": {
+    "object": "/Users/philipp/Coding/Pausely/.build/arm64-apple-macosx/release/Pausely.build/BreakOverlayView.swift.o",
+    "swiftmodule": "/Users/philipp/Coding/Pausely/.build/arm64-apple-macosx/release/Pausely.build/BreakOverlayView~partial.swiftmodule",
+    "swift-dependencies": "/Users/philipp/Coding/Pausely/.build/arm64-apple-macosx/release/Pausely.build/BreakOverlayView.swiftdeps",
+    "diagnostics": "/Users/philipp/Coding/Pausely/.build/arm64-apple-macosx/release/Pausely.build/BreakOverlayView.dia"
+  },
+  "/Users/philipp/Coding/Pausely/Sources/Pausely/DynamicWallpaperResolver.swift": {
+    "object": "/Users/philipp/Coding/Pausely/.build/arm64-apple-macosx/release/Pausely.build/DynamicWallpaperResolver.swift.o",
+    "swiftmodule": "/Users/philipp/Coding/Pausely/.build/arm64-apple-macosx/release/Pausely.build/DynamicWallpaperResolver~partial.swiftmodule",
+    "swift-dependencies": "/Users/philipp/Coding/Pausely/.build/arm64-apple-macosx/release/Pausely.build/DynamicWallpaperResolver.swiftdeps",
+    "diagnostics": "/Users/philipp/Coding/Pausely/.build/arm64-apple-macosx/release/Pausely.build/DynamicWallpaperResolver.dia"
+  },
+  "/Users/philipp/Coding/Pausely/Sources/Pausely/OverlayWindowController.swift": {
+    "object": "/Users/philipp/Coding/Pausely/.build/arm64-apple-macosx/release/Pausely.build/OverlayWindowController.swift.o",
+    "swiftmodule": "/Users/philipp/Coding/Pausely/.build/arm64-apple-macosx/release/Pausely.build/OverlayWindowController~partial.swiftmodule",
+    "swift-dependencies": "/Users/philipp/Coding/Pausely/.build/arm64-apple-macosx/release/Pausely.build/OverlayWindowController.swiftdeps",
+    "diagnostics": "/Users/philipp/Coding/Pausely/.build/arm64-apple-macosx/release/Pausely.build/OverlayWindowController.dia"
+  },
+  "/Users/philipp/Coding/Pausely/Sources/Pausely/PauselyApp.swift": {
+    "object": "/Users/philipp/Coding/Pausely/.build/arm64-apple-macosx/release/Pausely.build/PauselyApp.swift.o",
+    "swiftmodule": "/Users/philipp/Coding/Pausely/.build/arm64-apple-macosx/release/Pausely.build/PauselyApp~partial.swiftmodule",
+    "swift-dependencies": "/Users/philipp/Coding/Pausely/.build/arm64-apple-macosx/release/Pausely.build/PauselyApp.swiftdeps",
+    "diagnostics": "/Users/philipp/Coding/Pausely/.build/arm64-apple-macosx/release/Pausely.build/PauselyApp.dia"
+  },
+  "/Users/philipp/Coding/Pausely/Sources/Pausely/SoundManager.swift": {
+    "object": "/Users/philipp/Coding/Pausely/.build/arm64-apple-macosx/release/Pausely.build/SoundManager.swift.o",
+    "swiftmodule": "/Users/philipp/Coding/Pausely/.build/arm64-apple-macosx/release/Pausely.build/SoundManager~partial.swiftmodule",
+    "swift-dependencies": "/Users/philipp/Coding/Pausely/.build/arm64-apple-macosx/release/Pausely.build/SoundManager.swiftdeps",
+    "diagnostics": "/Users/philipp/Coding/Pausely/.build/arm64-apple-macosx/release/Pausely.build/SoundManager.dia"
+  }
+}
