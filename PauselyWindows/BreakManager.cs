@@ -56,6 +56,11 @@ namespace PauselyWindows
         public event EventHandler BreakEnding;
         public event EventHandler BreakEnded;
 
+        private const double REVERSE_ANIMATION_DURATION_SECONDS = 1.15;
+        private const double TEST_MODE_THRESHOLD = 15;
+        private const int TEST_MODE_SNOOZE_DURATION = 10;
+        private const int STANDARD_SNOOZE_DURATION = 300;
+
         private BreakManager()
         {
             TimeRemaining = (int)WorkInterval;
@@ -106,7 +111,7 @@ namespace PauselyWindows
 
             BreakEnding?.Invoke(this, EventArgs.Empty);
 
-            var endTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.15) };
+            var endTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(REVERSE_ANIMATION_DURATION_SECONDS) };
             endTimer.Tick += (s, e) =>
             {
                 endTimer.Stop();
@@ -128,20 +133,20 @@ namespace PauselyWindows
 
             BreakEnding?.Invoke(this, EventArgs.Empty);
 
-            var endTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.15) };
+            var endTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(REVERSE_ANIMATION_DURATION_SECONDS) };
             endTimer.Tick += (s, e) =>
             {
                 endTimer.Stop();
                 _isEnding = false;
                 Status = BreakStatus.Working;
 
-                if (WorkInterval <= 15)
+                if (WorkInterval <= TEST_MODE_THRESHOLD)
                 {
-                    TimeRemaining = 10;
+                    TimeRemaining = TEST_MODE_SNOOZE_DURATION;
                 }
                 else
                 {
-                    TimeRemaining = 300;
+                    TimeRemaining = STANDARD_SNOOZE_DURATION;
                 }
 
                 OnPropertyChanged();

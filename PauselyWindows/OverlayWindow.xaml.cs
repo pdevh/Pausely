@@ -15,6 +15,7 @@ namespace PauselyWindows
         private static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
 
         private const int SPI_GETDESKWALLPAPER = 0x0073;
+        private const int MAX_PATH = 260;
 
         public OverlayWindow()
         {
@@ -30,8 +31,8 @@ namespace PauselyWindows
         {
             try
             {
-                string wallpaperPath = new string('\0', 260);
-                SystemParametersInfo(SPI_GETDESKWALLPAPER, 260, wallpaperPath, 0);
+                string wallpaperPath = new string('\0', MAX_PATH);
+                SystemParametersInfo(SPI_GETDESKWALLPAPER, MAX_PATH, wallpaperPath, 0);
                 wallpaperPath = wallpaperPath.Substring(0, wallpaperPath.IndexOf('\0'));
 
                 if (!string.IsNullOrEmpty(wallpaperPath))
