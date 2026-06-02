@@ -111,13 +111,13 @@ struct ControlsView: View {
     var body: some View {
         VStack(spacing: 20) {
             HStack(spacing: 16) {
-                // Skip Break Button
+                // Snooze Button
                 Button(action: {
                     breakManager.snoozeBreak()
                 }) {
                     HStack(spacing: 6) {
-                        Image(systemName: "chevron.forward.2")
-                        Text("Skip Break")
+                        Image(systemName: "zzz")
+                        Text("Snooze")
                     }
                 }
                 .buttonStyle(GlassButtonStyle(isHovered: isSkipHovered))
@@ -145,7 +145,7 @@ struct ControlsView: View {
                     .foregroundColor(.white.opacity(0.55))
                 
                 // Keyboard shortcut hint
-                Text("Press Esc twice to skip the break")
+                Text("Press Esc twice to snooze the break")
                     .font(.system(size: 12, weight: .regular, design: .rounded))
                     .foregroundColor(.white.opacity(0.4))
                     .padding(.horizontal, 10)

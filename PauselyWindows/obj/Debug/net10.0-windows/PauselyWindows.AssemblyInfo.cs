@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("PauselyWindows")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+76ae3776cc44095c57d26fbc18a1d9fa5a3202a5")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+d7451d0c89556592037125053b96c1e115864c63")]
 [assembly: System.Reflection.AssemblyProductAttribute("PauselyWindows")]
 [assembly: System.Reflection.AssemblyTitleAttribute("PauselyWindows")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

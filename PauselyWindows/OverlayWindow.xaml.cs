@@ -14,6 +14,9 @@ namespace PauselyWindows
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         private static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
 
+        [DllImport("user32.dll")]
+        public static extern bool LockWorkStation();
+
         private const int SPI_GETDESKWALLPAPER = 0x0073;
         private const int MAX_PATH = 260;
 
@@ -106,9 +109,9 @@ namespace PauselyWindows
             _breakManager.SnoozeBreak();
         }
 
-        private void Skip_Click(object sender, RoutedEventArgs e)
+        private void LockScreen_Click(object sender, RoutedEventArgs e)
         {
-            _breakManager.SkipBreak();
+            LockWorkStation();
         }
 
         protected override void OnClosed(EventArgs e)

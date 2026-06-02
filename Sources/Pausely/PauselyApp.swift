@@ -79,7 +79,8 @@ class MenuManager: NSObject, NSMenuDelegate {
         menu.removeAllItems()
         
         // Title Header
-        let headerItem = NSMenuItem(title: "Pausely MVP", action: nil, keyEquivalent: "")
+        let headerTitle = breakManager.isSyncedSession ? "Pausely MVP (Synced)" : "Pausely MVP"
+        let headerItem = NSMenuItem(title: headerTitle, action: nil, keyEquivalent: "")
         headerItem.isEnabled = false
         menu.addItem(headerItem)
         
@@ -96,6 +97,17 @@ class MenuManager: NSObject, NSMenuDelegate {
         let startBreakItem = NSMenuItem(title: "Start Break Now", action: #selector(startBreakClicked), keyEquivalent: "")
         startBreakItem.target = self
         menu.addItem(startBreakItem)
+        
+        menu.addItem(NSMenuItem.separator())
+        
+        // Collaborative Studying
+        let copyCodeItem = NSMenuItem(title: "Copy Session Code", action: #selector(copySessionCodeClicked), keyEquivalent: "")
+        copyCodeItem.target = self
+        menu.addItem(copyCodeItem)
+        
+        let joinSessionItem = NSMenuItem(title: "Join Session...", action: #selector(joinSessionClicked), keyEquivalent: "")
+        joinSessionItem.target = self
+        menu.addItem(joinSessionItem)
         
         menu.addItem(NSMenuItem.separator())
         
@@ -149,6 +161,38 @@ class MenuManager: NSObject, NSMenuDelegate {
     
     @objc private func startBreakClicked() {
         breakManager.triggerBreak()
+    }
+    
+    @objc private func copySessionCodeClicked() {
+        let code = breakManager.generateSessionCode()
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(code, forType: .string)
+    }
+    
+    @objc private func joinSessionClicked() {
+        // Run on main thread but delay slightly if menu is closing
+        DispatchQueue.main.async {
+            let alert = NSAlert()
+            alert.messageText = "Join Collaborative Session"
+            alert.informativeText = "Paste the session code below:"
+            alert.addButton(withTitle: "Join")
+            alert.addButton(withTitle: "Cancel")
+            
+            let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 250, height: 24))
+            alert.accessoryView = input
+            
+            // Bring app to foreground to show alert properly
+            NSApp.activate(ignoringOtherApps: true)
+            
+            let response = alert.runModal()
+            if response == .alertFirstButtonReturn {
+                let code = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !code.isEmpty {
+                    self.breakManager.joinSession(code: code)
+                }
+            }
+        }
     }
     
     @objc private func workIntervalSelected(_ sender: NSMenuItem) {

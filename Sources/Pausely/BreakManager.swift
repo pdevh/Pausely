@@ -14,9 +14,18 @@ class BreakManager: ObservableObject {
     @Published var timeRemaining: Int = 1200 // Default to 20 minutes (1200 seconds)
     @Published var snoozesLeft: Int = 4
     
+    @Published var isSyncedSession: Bool = false
+    private var anchorTimestamp: TimeInterval = 0
+    private var skippedCycleIndices: Set<Int> = []
+    private var isApplyingSync = false
+    private var snoozeEndTime: Date? = nil
+    
     // Configurations
     @Published var workInterval: TimeInterval = 1200 { // 20 minutes
         didSet {
+            if !isApplyingSync {
+                isSyncedSession = false
+            }
             if status == .working {
                 timeRemaining = Int(workInterval)
             }
@@ -24,6 +33,9 @@ class BreakManager: ObservableObject {
     }
     @Published var breakDuration: TimeInterval = 20 { // 20 seconds
         didSet {
+            if !isApplyingSync {
+                isSyncedSession = false
+            }
             if status == .inBreak {
                 timeRemaining = Int(breakDuration)
             }
@@ -50,20 +62,71 @@ class BreakManager: ObservableObject {
     
     private func tick() {
         guard !isEnding else { return }
-        if timeRemaining > 0 {
-            timeRemaining -= 1
-        } else {
-            if status == .working {
-                triggerBreak()
+        
+        if isSyncedSession {
+            let cycleDuration = workInterval + breakDuration
+            let elapsed = max(0, Date().timeIntervalSince1970 - anchorTimestamp)
+            let currentCycleIndex = Int(elapsed / cycleDuration)
+            let cyclePosition = elapsed.truncatingRemainder(dividingBy: cycleDuration)
+            
+            var newStatus: BreakStatus = .working
+            var newTimeRemaining: Double = 0
+            
+            if cyclePosition < workInterval {
+                newStatus = .working
+                newTimeRemaining = workInterval - cyclePosition
             } else {
+                if skippedCycleIndices.contains(currentCycleIndex) {
+                    newStatus = .working
+                    newTimeRemaining = (cycleDuration - cyclePosition) + workInterval
+                } else {
+                    newStatus = .inBreak
+                    newTimeRemaining = cycleDuration - cyclePosition
+                }
+            }
+            
+            // Apply Snooze Override
+            if let snoozeEnd = snoozeEndTime {
+                if Date() < snoozeEnd {
+                    newStatus = .working
+                    newTimeRemaining = snoozeEnd.timeIntervalSince(Date())
+                } else {
+                    snoozeEndTime = nil
+                    // Will naturally fall back to math on next tick
+                }
+            }
+            
+            let oldStatus = self.status
+            self.status = newStatus
+            self.timeRemaining = Int(ceil(newTimeRemaining))
+            
+            if oldStatus == .working && newStatus == .inBreak {
+                triggerBreak()
+            } else if oldStatus == .inBreak && newStatus == .working {
+                // If it transitioned naturally to work, we must close overlays
+                // We use endBreak to perform the animation gracefully
                 endBreak()
+            }
+            
+        } else {
+            if timeRemaining > 0 {
+                timeRemaining -= 1
+            } else {
+                if status == .working {
+                    triggerBreak()
+                } else {
+                    endBreak()
+                }
             }
         }
     }
     
     func triggerBreak() {
         status = .inBreak
-        timeRemaining = Int(breakDuration)
+        
+        if !isSyncedSession {
+            timeRemaining = Int(breakDuration)
+        }
         
         // Show fullscreen overlay panels across all displays
         overlayController.showOverlays(breakManager: self)
@@ -85,7 +148,10 @@ class BreakManager: ObservableObject {
             guard let self = self else { return }
             self.isEnding = false
             self.status = .working
-            self.timeRemaining = Int(self.workInterval)
+            
+            if !self.isSyncedSession {
+                self.timeRemaining = Int(self.workInterval)
+            }
             self.snoozesLeft = 4 // Reset snoozes at full break completion
             
             // Close overlays
@@ -110,12 +176,12 @@ class BreakManager: ObservableObject {
             self.isEnding = false
             self.status = .working
             
-            // Snooze duration is 5 minutes (300 seconds). 
-            // If testing on very short workInterval (e.g. 15s), snooze is 10s.
-            if self.workInterval <= 15 {
-                self.timeRemaining = 10
+            let snoozeDuration: TimeInterval = self.workInterval <= 15 ? 10 : 300
+            
+            if self.isSyncedSession {
+                self.snoozeEndTime = Date().addingTimeInterval(snoozeDuration)
             } else {
-                self.timeRemaining = 300
+                self.timeRemaining = Int(snoozeDuration)
             }
             
             // Close overlays
@@ -127,6 +193,55 @@ class BreakManager: ObservableObject {
     }
     
     func skipBreak() {
+        if isSyncedSession {
+            let cycleDuration = workInterval + breakDuration
+            let elapsed = max(0, Date().timeIntervalSince1970 - anchorTimestamp)
+            let currentCycleIndex = Int(elapsed / cycleDuration)
+            skippedCycleIndices.insert(currentCycleIndex)
+        }
         endBreak()
+    }
+    
+    func generateSessionCode() -> String {
+        if !isSyncedSession {
+            // Backdate the anchor so current timeRemaining is seamless
+            if status == .working {
+                let elapsed = workInterval - TimeInterval(timeRemaining)
+                anchorTimestamp = Date().timeIntervalSince1970 - elapsed
+            } else {
+                let elapsed = (workInterval + breakDuration) - TimeInterval(timeRemaining)
+                anchorTimestamp = Date().timeIntervalSince1970 - elapsed
+            }
+            isSyncedSession = true
+        }
+        let payload = "\(Int(workInterval)):\(Int(breakDuration)):\(Int(anchorTimestamp))"
+        return payload.data(using: .utf8)?.base64EncodedString() ?? ""
+    }
+    
+    func joinSession(code: String) {
+        guard let data = Data(base64Encoded: code),
+              let payload = String(data: data, encoding: .utf8) else { return }
+        
+        let parts = payload.split(separator: ":")
+        guard parts.count == 3,
+              let w = TimeInterval(parts[0]),
+              let b = TimeInterval(parts[1]),
+              let a = TimeInterval(parts[2]) else { return }
+        
+        isApplyingSync = true
+        self.workInterval = w
+        self.breakDuration = b
+        isApplyingSync = false
+        
+        self.anchorTimestamp = a
+        self.isSyncedSession = true
+        self.skippedCycleIndices.removeAll()
+        self.snoozeEndTime = nil
+        self.snoozesLeft = 4
+        
+        // If they were in break locally but the code puts them in work, ensure overlays close
+        if self.status == .inBreak {
+            self.overlayController.closeOverlays()
+        }
     }
 }

@@ -1,4 +1,4 @@
-﻿<Application x:Class="PauselyWindows.App"
+<Application x:Class="PauselyWindows.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:PauselyWindows"
@@ -10,6 +10,9 @@
             <MenuItem x:Name="StatusMenuItem" Header="Status" IsEnabled="False" />
             <Separator />
             <MenuItem Header="Start Break Now" Click="StartBreak_Click" />
+            <Separator />
+            <MenuItem Header="Copy Session Code" Click="CopySessionCode_Click" />
+            <MenuItem Header="Join Session..." Click="JoinSession_Click" />
             <Separator />
             <MenuItem Header="Work Interval">
                 <MenuItem Header="15 seconds (Test Mode)" Tag="15" Click="WorkInterval_Click" />
