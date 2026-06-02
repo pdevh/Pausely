@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "dgSpecHash": "eGqFNXLhSQg=",
+  "success": true,
+  "projectFilePath": "/tmp/workspace/pdevh/Pausely/PauselyWindows/PauselyWindows.csproj",
+  "expectedPackageFiles": [
+    "/home/runner/.nuget/packages/hardcodet.notifyicon.wpf/2.0.1/hardcodet.notifyicon.wpf.2.0.1.nupkg.sha512",
+    "/home/runner/.nuget/packages/microsoft.windowsdesktop.app.ref/10.0.8/microsoft.windowsdesktop.app.ref.10.0.8.nupkg.sha512"
+  ],
+  "logs": []
+}
