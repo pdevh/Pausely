@@ -37,7 +37,7 @@ private enum AnimConst {
     static let clockOffscreenPadding: CGFloat = 16
 
     // Phase durations in seconds (frames * frameDuration)
-    static let phase0Duration: Double = 53 * frameDuration  // 1.06s background
+    static let phase0Duration: Double = 25 * frameDuration  // 0.50s background
     static let phase0To1Gap: Double = 2 * frameDuration     // 2-frame gap (frame 53→55)
     static let phase1Duration: Double = 35 * frameDuration  // 0.70s main text
     static let phase2Duration: Double = 25 * frameDuration  // 0.50s secondary text
@@ -46,9 +46,9 @@ private enum AnimConst {
 
     // Delays from onAppear (frame 0)
     static let phase0Delay: Double = 0
-    static let phase1Delay: Double = 55 * frameDuration     // 1.10s
-    static let phase2Delay: Double = 90 * frameDuration     // 1.80s
-    static let phase3Delay: Double = 120 * frameDuration    // 2.40s
+    static let phase1Delay: Double = 27 * frameDuration     // 0.54s
+    static let phase2Delay: Double = 62 * frameDuration     // 1.24s
+    static let phase3Delay: Double = 92 * frameDuration     // 1.84s
 }
 
 // MARK: - Glass Button Style
@@ -270,7 +270,9 @@ struct BreakOverlayView: View {
                         .opacity(controlsOpacity)
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(width: geo.size.width, height: geo.size.height)
+            .position(x: geo.size.width / 2, y: geo.size.height / 2)
+            .clipped()
             .edgesIgnoringSafeArea(.all)
             .onAppear {
                 // Set initial main text offset: starts shifted UP by half its height

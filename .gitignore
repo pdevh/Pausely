@@ -3,6 +3,13 @@
 .AppleDouble
 .LSOverride
 
+# Swift Package Manager build directory
+.build/
+
+# Built Application
+Pausely.app/
+
+
 # Icon must end with two \r
 Icon
 
