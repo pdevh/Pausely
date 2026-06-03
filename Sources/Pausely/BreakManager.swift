@@ -20,6 +20,17 @@ class BreakManager: ObservableObject {
     private var isApplyingSync = false
     private var snoozeEndTime: Date? = nil
     
+    private var previousWorkInterval: TimeInterval = 1200
+    private var previousBreakDuration: TimeInterval = 20
+    
+    var anchorTimeString: String {
+        guard isSyncedSession else { return "" }
+        let date = Date(timeIntervalSince1970: anchorTimestamp)
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+    
     // Configurations
     @Published var workInterval: TimeInterval = 1200 { // 20 minutes
         didSet {
@@ -228,6 +239,11 @@ class BreakManager: ObservableObject {
               let b = TimeInterval(parts[1]),
               let a = TimeInterval(parts[2]) else { return }
         
+        if !isSyncedSession {
+            previousWorkInterval = self.workInterval
+            previousBreakDuration = self.breakDuration
+        }
+        
         isApplyingSync = true
         self.workInterval = w
         self.breakDuration = b
@@ -243,5 +259,15 @@ class BreakManager: ObservableObject {
         if self.status == .inBreak {
             self.overlayController.closeOverlays()
         }
+    }
+    
+    func leaveSession() {
+        guard isSyncedSession else { return }
+        isSyncedSession = false
+        
+        isApplyingSync = true
+        self.workInterval = previousWorkInterval
+        self.breakDuration = previousBreakDuration
+        isApplyingSync = false
     }
 }
