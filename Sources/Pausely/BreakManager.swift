@@ -56,9 +56,14 @@ class BreakManager: ObservableObject {
         }
     }
     
-    private var timer: AnyCancellable?
+    private var gcdTimer: DispatchSourceTimer?
     private let overlayController = OverlayWindowController.shared
     private var isEnding = false // Guards against repeated endBreak/snooze calls during reverse animation
+    
+    /// Direct callback fired at the end of every tick, after all @Published
+    /// properties have been set.  Runs on the main queue via GCD — immune to
+    /// RunLoop-mode changes (e.g. NSMenu event-tracking).
+    var onTick: (() -> Void)?
     
     init() {
         timeRemaining = Int(workInterval)
@@ -66,12 +71,14 @@ class BreakManager: ObservableObject {
     }
     
     func startTimer() {
-        timer?.cancel()
-        timer = Timer.publish(every: 1.0, on: .main, in: .common)
-            .autoconnect()
-            .sink { [weak self] _ in
-                self?.tick()
-            }
+        gcdTimer?.cancel()
+        let source = DispatchSource.makeTimerSource(queue: .main)
+        source.schedule(deadline: .now() + 1.0, repeating: 1.0)
+        source.setEventHandler { [weak self] in
+            self?.tick()
+        }
+        source.resume()
+        gcdTimer = source
     }
     
     private func tick() {
@@ -142,6 +149,8 @@ class BreakManager: ObservableObject {
                 }
             }
         }
+        
+        onTick?()
     }
     
     func triggerBreak() {
