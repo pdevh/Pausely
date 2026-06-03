@@ -19,10 +19,16 @@ namespace PauselyWindows
         public int SnoozesLeft { get; private set; } = 4;
 
         public bool IsSyncedSession { get; private set; } = false;
+        public bool IsInIntermission { get; private set; } = false;
+        public int IntermissionTimeRemaining { get; private set; } = 0;
         private double _anchorTimestamp = 0;
         private HashSet<int> _skippedCycleIndices = new HashSet<int>();
         private bool _isApplyingSync = false;
         private DateTime? _snoozeEndTime = null;
+        private DateTime _lastBreakDisplayedTime = DateTime.Now;
+
+        private double _previousWorkInterval = 1200;
+        private double _previousBreakDuration = 20;
 
         private double GetCurrentUnixTime() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0;
 
@@ -66,6 +72,8 @@ namespace PauselyWindows
         public event EventHandler BreakTriggered;
         public event EventHandler BreakEnding;
         public event EventHandler BreakEnded;
+        public event EventHandler IntermissionTriggered;
+        public event EventHandler IntermissionEnded;
 
         private const double REVERSE_ANIMATION_DURATION_SECONDS = 1.15;
         private const double TEST_MODE_THRESHOLD = 15;
@@ -88,6 +96,20 @@ namespace PauselyWindows
 
         private void Tick()
         {
+            // Handle intermission countdown independently
+            if (IsInIntermission)
+            {
+                if (IntermissionTimeRemaining > 0)
+                {
+                    IntermissionTimeRemaining -= 1;
+                    TimerTicked?.Invoke(this, EventArgs.Empty);
+                }
+                else
+                {
+                    EndIntermission();
+                }
+            }
+
             if (_isEnding) return;
 
             if (IsSyncedSession)
@@ -173,6 +195,7 @@ namespace PauselyWindows
         public void TriggerBreak()
         {
             Status = BreakStatus.InBreak;
+            _lastBreakDisplayedTime = DateTime.Now;
             if (!IsSyncedSession)
             {
                 TimeRemaining = (int)BreakDuration;
@@ -249,6 +272,32 @@ namespace PauselyWindows
             EndBreak();
         }
 
+        public void StartIntermission()
+        {
+            if (IsInIntermission) return;
+            IsInIntermission = true;
+            IntermissionTimeRemaining = (int)BreakDuration;
+            OnPropertyChanged();
+            IntermissionTriggered?.Invoke(this, EventArgs.Empty);
+        }
+
+        public void EndIntermission()
+        {
+            IsInIntermission = false;
+            IntermissionTimeRemaining = 0;
+
+            BreakEnding?.Invoke(this, EventArgs.Empty);
+
+            var endTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(REVERSE_ANIMATION_DURATION_SECONDS) };
+            endTimer.Tick += (s, e) =>
+            {
+                endTimer.Stop();
+                OnPropertyChanged();
+                IntermissionEnded?.Invoke(this, EventArgs.Empty);
+            };
+            endTimer.Start();
+        }
+
         public string GenerateSessionCode()
         {
             if (!IsSyncedSession)
@@ -280,6 +329,12 @@ namespace PauselyWindows
                 var parts = payload.Split(':');
                 if (parts.Length == 3)
                 {
+                    if (!IsSyncedSession)
+                    {
+                        _previousWorkInterval = WorkInterval;
+                        _previousBreakDuration = BreakDuration;
+                    }
+
                     _isApplyingSync = true;
                     WorkInterval = double.Parse(parts[0]);
                     BreakDuration = double.Parse(parts[1]);
@@ -290,12 +345,49 @@ namespace PauselyWindows
                     _skippedCycleIndices.Clear();
                     _snoozeEndTime = null;
                     SnoozesLeft = 4;
+
+                    // If they were in break locally but the code puts them in work, ensure overlays close
+                    if (Status == BreakStatus.InBreak)
+                    {
+                        BreakEnded?.Invoke(this, EventArgs.Empty);
+                    }
                 }
             }
             catch
             {
                 // Invalid code
             }
+        }
+
+        public void LeaveSession()
+        {
+            if (!IsSyncedSession) return;
+            IsSyncedSession = false;
+
+            _isApplyingSync = true;
+            WorkInterval = _previousWorkInterval;
+            BreakDuration = _previousBreakDuration;
+            _isApplyingSync = false;
+
+            // Re-anchor based on the last break that was displayed to the user
+            double elapsed = (DateTime.Now - _lastBreakDisplayedTime).TotalSeconds;
+            if (elapsed >= _previousWorkInterval)
+            {
+                // Overdue for a break — trigger immediately
+                TimeRemaining = 0;
+            }
+            else
+            {
+                TimeRemaining = (int)(_previousWorkInterval - elapsed);
+            }
+            Status = BreakStatus.Working;
+
+            // Clean up sync state
+            _skippedCycleIndices.Clear();
+            _snoozeEndTime = null;
+            SnoozesLeft = 4;
+
+            OnPropertyChanged();
         }
 
         private void OnPropertyChanged()

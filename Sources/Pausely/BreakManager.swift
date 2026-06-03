@@ -15,10 +15,13 @@ class BreakManager: ObservableObject {
     @Published var snoozesLeft: Int = 4
     
     @Published var isSyncedSession: Bool = false
+    @Published var isInIntermission: Bool = false
+    @Published var intermissionTimeRemaining: Int = 0
     private var anchorTimestamp: TimeInterval = 0
     private var skippedCycleIndices: Set<Int> = []
     private var isApplyingSync = false
     private var snoozeEndTime: Date? = nil
+    private var lastBreakDisplayedTime: Date = Date()
     
     private var previousWorkInterval: TimeInterval = 1200
     private var previousBreakDuration: TimeInterval = 20
@@ -72,6 +75,15 @@ class BreakManager: ObservableObject {
     }
     
     private func tick() {
+        // Handle intermission countdown independently
+        if isInIntermission {
+            if intermissionTimeRemaining > 0 {
+                intermissionTimeRemaining -= 1
+            } else {
+                endIntermission()
+            }
+        }
+
         guard !isEnding else { return }
         
         if isSyncedSession {
@@ -134,6 +146,7 @@ class BreakManager: ObservableObject {
     
     func triggerBreak() {
         status = .inBreak
+        lastBreakDisplayedTime = Date()
         
         if !isSyncedSession {
             timeRemaining = Int(breakDuration)
@@ -212,6 +225,31 @@ class BreakManager: ObservableObject {
         }
         endBreak()
     }
+
+    func startIntermission() {
+        guard !isInIntermission else { return }
+        isInIntermission = true
+        intermissionTimeRemaining = Int(breakDuration)
+        
+        // Show fullscreen overlay panels across all displays
+        overlayController.showOverlays(breakManager: self, isIntermission: true)
+        
+        SoundManager.playStartSound()
+    }
+    
+    func endIntermission() {
+        isInIntermission = false
+        intermissionTimeRemaining = 0
+        
+        // Post notification so the overlay can play reverse animations
+        NotificationCenter.default.post(name: .breakWillEnd, object: nil)
+        
+        let reverseAnimationDuration = 1.15
+        DispatchQueue.main.asyncAfter(deadline: .now() + reverseAnimationDuration) { [weak self] in
+            self?.overlayController.closeOverlays()
+            SoundManager.playEndSound()
+        }
+    }
     
     func generateSessionCode() -> String {
         if !isSyncedSession {
@@ -269,5 +307,20 @@ class BreakManager: ObservableObject {
         self.workInterval = previousWorkInterval
         self.breakDuration = previousBreakDuration
         isApplyingSync = false
+        
+        // Re-anchor based on the last break that was displayed to the user
+        let elapsed = Date().timeIntervalSince(lastBreakDisplayedTime)
+        if elapsed >= previousWorkInterval {
+            // Overdue for a break — trigger immediately
+            timeRemaining = 0
+        } else {
+            timeRemaining = Int(previousWorkInterval - elapsed)
+        }
+        status = .working
+        
+        // Clean up sync state
+        skippedCycleIndices.removeAll()
+        snoozeEndTime = nil
+        snoozesLeft = 4
     }
 }

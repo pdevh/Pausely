@@ -10,6 +10,7 @@ namespace PauselyWindows
     public partial class OverlayWindow : Window
     {
         private BreakManager _breakManager;
+        private bool _isIntermission;
 
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         private static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
@@ -20,14 +21,16 @@ namespace PauselyWindows
         private const int SPI_GETDESKWALLPAPER = 0x0073;
         private const int MAX_PATH = 260;
 
-        public OverlayWindow()
+        public OverlayWindow(bool isIntermission = false)
         {
             InitializeComponent();
             _breakManager = BreakManager.Shared;
+            _isIntermission = isIntermission;
             _breakManager.TimerTicked += BreakManager_TimerTicked;
             _breakManager.BreakEnding += BreakManager_BreakEnding;
             UpdateTimerText();
             SetBackground();
+            SetupIntermissionUI();
         }
 
         private void SetBackground()
@@ -92,7 +95,7 @@ namespace PauselyWindows
         {
             Dispatcher.Invoke(() =>
             {
-                int remaining = _breakManager.TimeRemaining;
+                int remaining = _isIntermission ? _breakManager.IntermissionTimeRemaining : _breakManager.TimeRemaining;
                 if (remaining >= 60)
                 {
                     TimerText.Text = $"{remaining / 60:D2}:{remaining % 60:D2}";
@@ -104,9 +107,36 @@ namespace PauselyWindows
             });
         }
 
+        private void SetupIntermissionUI()
+        {
+            if (_isIntermission)
+            {
+                // Change title text for voluntary break
+                var titleBlock = FindName("TitleText") as System.Windows.Controls.TextBlock;
+                if (titleBlock != null)
+                {
+                    titleBlock.Text = "Voluntary break";
+                }
+
+                // Replace Snooze button with End Early button
+                var snoozeButton = FindName("SnoozeButton") as System.Windows.Controls.Button;
+                if (snoozeButton != null)
+                {
+                    snoozeButton.Content = "End Early";
+                    snoozeButton.Click -= Snooze_Click;
+                    snoozeButton.Click += EndEarly_Click;
+                }
+            }
+        }
+
         private void Snooze_Click(object sender, RoutedEventArgs e)
         {
             _breakManager.SnoozeBreak();
+        }
+
+        private void EndEarly_Click(object sender, RoutedEventArgs e)
+        {
+            _breakManager.EndIntermission();
         }
 
         private void LockScreen_Click(object sender, RoutedEventArgs e)

@@ -101,6 +101,25 @@ struct TimerCountdownView: View {
     }
 }
 
+struct IntermissionTimerView: View {
+    @ObservedObject var breakManager: BreakManager
+    
+    var body: some View {
+        Text(timeFormatted(breakManager.intermissionTimeRemaining))
+            .font(.system(size: 84, weight: .bold, design: .rounded))
+            .monospacedDigit()
+            .foregroundColor(Color(red: 0.72, green: 0.88, blue: 1.0))
+            .contentTransition(.numericText(countsDown: true))
+            .animation(.easeOut(duration: 0.4), value: breakManager.intermissionTimeRemaining)
+    }
+    
+    private func timeFormatted(_ totalSeconds: Int) -> String {
+        let minutes = totalSeconds / 60
+        let seconds = totalSeconds % 60
+        return String(format: "%02d:%02d", minutes, seconds)
+    }
+}
+
 // MARK: - Isolated Controls Component
 
 struct ControlsView: View {
@@ -157,6 +176,34 @@ struct ControlsView: View {
     }
 }
 
+struct IntermissionControlsView: View {
+    @ObservedObject var breakManager: BreakManager
+    @State private var isEndHovered = false
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Button(action: {
+                breakManager.endIntermission()
+            }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "xmark")
+                    Text("End Early")
+                }
+            }
+            .buttonStyle(GlassButtonStyle(isHovered: isEndHovered))
+            .onHover { hovering in isEndHovered = hovering }
+            
+            Text("Press Esc twice to end early")
+                .font(.system(size: 12, weight: .regular, design: .rounded))
+                .foregroundColor(.white.opacity(0.4))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Color.white.opacity(0.06))
+                .cornerRadius(6)
+        }
+    }
+}
+
 // MARK: - Main Break Overlay View
 
 struct BreakOverlayView: View {
@@ -165,6 +212,7 @@ struct BreakOverlayView: View {
     
     // NOT @ObservedObject — timer ticks must not re-render this view.
     let breakManager: BreakManager
+    var isIntermission: Bool = false
     
     // --- Animation state ---
     // Phase 0: Background wallpaper transition
@@ -238,7 +286,7 @@ struct BreakOverlayView: View {
                 // ──────────────────────────────────────────────
                 VStack(spacing: 24) {
                     // Main Text (Phase 1: blur + downward movement from above)
-                    Text("Eyes to the horizon")
+                    Text(isIntermission ? "Voluntary break" : "Eyes to the horizon")
                         .font(.system(size: 52, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
                         .blur(radius: mainTextBlur)
@@ -246,7 +294,7 @@ struct BreakOverlayView: View {
                         .opacity(mainTextOpacity)
                     
                     // Secondary Text (Phase 2: blur only, no movement)
-                    Text("Set your eyes on something distant until the countdown is over")
+                    Text(isIntermission ? "Take a moment to rest your eyes" : "Set your eyes on something distant until the countdown is over")
                         .font(.system(size: 18, weight: .medium, design: .rounded))
                         .foregroundColor(.white.opacity(0.85))
                         .blur(radius: secondaryTextBlur)
@@ -260,14 +308,26 @@ struct BreakOverlayView: View {
                         .opacity(controlsOpacity)
                     
                     // Countdown timer (isolated — ticks don't touch parent)
-                    TimerCountdownView(breakManager: breakManager)
-                        .blur(radius: controlsBlur)
-                        .opacity(controlsOpacity)
+                    if isIntermission {
+                        IntermissionTimerView(breakManager: breakManager)
+                            .blur(radius: controlsBlur)
+                            .opacity(controlsOpacity)
+                    } else {
+                        TimerCountdownView(breakManager: breakManager)
+                            .blur(radius: controlsBlur)
+                            .opacity(controlsOpacity)
+                    }
                     
                     // Controls (isolated)
-                    ControlsView(breakManager: breakManager)
-                        .blur(radius: controlsBlur)
-                        .opacity(controlsOpacity)
+                    if isIntermission {
+                        IntermissionControlsView(breakManager: breakManager)
+                            .blur(radius: controlsBlur)
+                            .opacity(controlsOpacity)
+                    } else {
+                        ControlsView(breakManager: breakManager)
+                            .blur(radius: controlsBlur)
+                            .opacity(controlsOpacity)
+                    }
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)

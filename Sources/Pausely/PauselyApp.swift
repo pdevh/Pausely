@@ -109,12 +109,19 @@ class MenuManager: NSObject, NSMenuDelegate {
         joinSessionItem.target = self
         menu.addItem(joinSessionItem)
         
+        if breakManager.isSyncedSession {
+            let leaveSessionItem = NSMenuItem(title: "Leave Session", action: #selector(leaveSessionClicked), keyEquivalent: "")
+            leaveSessionItem.target = self
+            menu.addItem(leaveSessionItem)
+        }
+        
         menu.addItem(NSMenuItem.separator())
         
         // Work Interval configuration
         let workIntervalSubmenu = NSMenu()
         let workIntervalItem = NSMenuItem(title: "Work Interval", action: nil, keyEquivalent: "")
         workIntervalItem.submenu = workIntervalSubmenu
+        workIntervalItem.isEnabled = !breakManager.isSyncedSession
         menu.addItem(workIntervalItem)
         
         let currentInterval = breakManager.workInterval
@@ -127,6 +134,7 @@ class MenuManager: NSObject, NSMenuDelegate {
         let breakDurationSubmenu = NSMenu()
         let breakDurationItem = NSMenuItem(title: "Break Duration", action: nil, keyEquivalent: "")
         breakDurationItem.submenu = breakDurationSubmenu
+        breakDurationItem.isEnabled = !breakManager.isSyncedSession
         menu.addItem(breakDurationItem)
         
         let currentDuration = breakManager.breakDuration
@@ -160,7 +168,7 @@ class MenuManager: NSObject, NSMenuDelegate {
     }
     
     @objc private func startBreakClicked() {
-        breakManager.triggerBreak()
+        breakManager.startIntermission()
     }
     
     @objc private func copySessionCodeClicked() {
@@ -193,6 +201,10 @@ class MenuManager: NSObject, NSMenuDelegate {
                 }
             }
         }
+    }
+    
+    @objc private func leaveSessionClicked() {
+        breakManager.leaveSession()
     }
     
     @objc private func workIntervalSelected(_ sender: NSMenuItem) {

@@ -29,6 +29,8 @@ namespace PauselyWindows
             _breakManager.TimerTicked += BreakManager_TimerTicked;
             _breakManager.BreakTriggered += BreakManager_BreakTriggered;
             _breakManager.BreakEnded += BreakManager_BreakEnded;
+            _breakManager.IntermissionTriggered += BreakManager_IntermissionTriggered;
+            _breakManager.IntermissionEnded += BreakManager_IntermissionEnded;
 
             UpdateStatusMenu();
         }
@@ -65,6 +67,22 @@ namespace PauselyWindows
                     string timeFormatted = $"{_breakManager.TimeRemaining / 60:D2}:{_breakManager.TimeRemaining % 60:D2}";
                     statusItem.Header = $"Next break in {timeFormatted}";
                     _taskbarIcon.ToolTipText = $"Next break in {timeFormatted}";
+                }
+
+                // Dynamically show/hide Leave Session and enable/disable settings
+                foreach (object item in contextMenu.Items)
+                {
+                    if (item is System.Windows.Controls.MenuItem menuItem)
+                    {
+                        if (menuItem.Name == "LeaveSessionMenuItem")
+                        {
+                            menuItem.Visibility = _breakManager.IsSyncedSession ? Visibility.Visible : Visibility.Collapsed;
+                        }
+                        else if (menuItem.Name == "WorkIntervalMenuItem" || menuItem.Name == "BreakDurationMenuItem")
+                        {
+                            menuItem.IsEnabled = !_breakManager.IsSyncedSession;
+                        }
+                    }
                 }
             });
         }
@@ -107,7 +125,46 @@ namespace PauselyWindows
 
         private void StartBreak_Click(object sender, RoutedEventArgs e)
         {
-            _breakManager.TriggerBreak();
+            _breakManager.StartIntermission();
+        }
+
+        private void LeaveSession_Click(object sender, RoutedEventArgs e)
+        {
+            _breakManager.LeaveSession();
+        }
+
+        private void BreakManager_IntermissionTriggered(object sender, EventArgs e)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                System.Media.SystemSounds.Exclamation.Play();
+
+                _overlayWindows.Clear();
+                foreach (var screen in System.Windows.Forms.Screen.AllScreens)
+                {
+                    var window = new OverlayWindow(isIntermission: true);
+                    window.Left = screen.Bounds.Left;
+                    window.Top = screen.Bounds.Top;
+                    window.Width = screen.Bounds.Width;
+                    window.Height = screen.Bounds.Height;
+                    window.Show();
+                    _overlayWindows.Add(window);
+                }
+            });
+        }
+
+        private void BreakManager_IntermissionEnded(object sender, EventArgs e)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                System.Media.SystemSounds.Asterisk.Play();
+
+                foreach (var window in _overlayWindows)
+                {
+                    window.Close();
+                }
+                _overlayWindows.Clear();
+            });
         }
 
         private void WorkInterval_Click(object sender, RoutedEventArgs e)

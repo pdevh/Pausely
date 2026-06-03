@@ -19,7 +19,7 @@ class OverlayWindowController {
     private var escapeMonitor: Any?
     private var lastEscapePressTime: Date?
     
-    func showOverlays(breakManager: BreakManager) {
+    func showOverlays(breakManager: BreakManager, isIntermission: Bool = false) {
         closeOverlays()
         
         let screens = NSScreen.screens
@@ -44,7 +44,8 @@ class OverlayWindowController {
             let overlayView = BreakOverlayView(
                 crispWallpaper: images?.crisp,
                 blurredWallpaper: images?.blurred,
-                breakManager: breakManager
+                breakManager: breakManager,
+                isIntermission: isIntermission
             )
             
             panel.contentView = NSHostingView(rootView: overlayView)
@@ -83,9 +84,13 @@ class OverlayWindowController {
             if event.keyCode == 53 {
                 let now = Date()
                 if let lastPress = self?.lastEscapePressTime, now.timeIntervalSince(lastPress) < 0.5 {
-                    // Double press Escape! Skip the break.
+                    // Double press Escape!
                     DispatchQueue.main.async {
-                        breakManager.skipBreak()
+                        if breakManager.isInIntermission {
+                            breakManager.endIntermission()
+                        } else {
+                            breakManager.skipBreak()
+                        }
                     }
                     self?.lastEscapePressTime = nil
                 } else {

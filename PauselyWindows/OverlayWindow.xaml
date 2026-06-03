@@ -13,10 +13,10 @@
         <Rectangle Fill="#A0000000" />
         
         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-            <TextBlock Text="Time to step away" Foreground="White" FontSize="48" FontWeight="Light" HorizontalAlignment="Center" Margin="0,0,0,20"/>
+            <TextBlock x:Name="TitleText" Text="Time to step away" Foreground="White" FontSize="48" FontWeight="Light" HorizontalAlignment="Center" Margin="0,0,0,20"/>
             <TextBlock x:Name="TimerText" Text="20" Foreground="White" FontSize="120" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,40"/>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                <Button Content="Snooze" Width="150" Height="40" Margin="0,0,20,0" Click="Snooze_Click" Background="#444" Foreground="White" BorderThickness="0" FontSize="16"/>
+                <Button x:Name="SnoozeButton" Content="Snooze" Width="150" Height="40" Margin="0,0,20,0" Click="Snooze_Click" Background="#444" Foreground="White" BorderThickness="0" FontSize="16"/>
                 <Button Content="Lock Screen" Width="150" Height="40" Click="LockScreen_Click" Background="#444" Foreground="White" BorderThickness="0" FontSize="16"/>
             </StackPanel>
         </StackPanel>
