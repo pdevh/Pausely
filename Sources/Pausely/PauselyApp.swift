@@ -1,6 +1,5 @@
 import SwiftUI
 import AppKit
-import Combine
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -30,6 +29,7 @@ class StatusMenuItemView: NSView {
         set {
             guard label.stringValue != newValue else { return }
             label.stringValue = newValue
+            label.needsDisplay = true
         }
     }
     
@@ -60,7 +60,6 @@ class MenuManager: NSObject, NSMenuDelegate {
     private var statusItem: NSStatusItem?
     private let breakManager = BreakManager.shared
     private var statusMenuItemView: StatusMenuItemView?
-    private var cancellables = Set<AnyCancellable>()
     
     func setupMenuBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -73,16 +72,11 @@ class MenuManager: NSObject, NSMenuDelegate {
         buildMenu()
         updateStatusItemLabel()
         
-        // Subscribe to changes in BreakManager to update status and labels dynamically
-        breakManager.objectWillChange
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                // Defer to the next run loop cycle so BreakManager's properties have updated
-                DispatchQueue.main.async {
-                    self?.updateStatusItemLabel()
-                }
-            }
-            .store(in: &cancellables)
+        // Direct callback from the GCD timer — fires on the main queue,
+        // so it is immune to RunLoop-mode changes during NSMenu tracking.
+        breakManager.onTick = { [weak self] in
+            self?.updateStatusItemLabel()
+        }
     }
     
     func updateStatusItemLabel() {
@@ -113,7 +107,7 @@ class MenuManager: NSObject, NSMenuDelegate {
         menu.removeAllItems()
         
         // Title Header
-        let headerTitle = breakManager.isSyncedSession ? "Pausely MVP (Synced)" : "Pausely MVP"
+        let headerTitle = breakManager.isSyncedSession ? "Pausely (Synced)" : "Pausely"
         let headerItem = NSMenuItem(title: headerTitle, action: nil, keyEquivalent: "")
         headerItem.isEnabled = false
         menu.addItem(headerItem)

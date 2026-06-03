@@ -60,6 +60,11 @@ class BreakManager: ObservableObject {
     private let overlayController = OverlayWindowController.shared
     private var isEnding = false // Guards against repeated endBreak/snooze calls during reverse animation
     
+    /// Direct callback fired at the end of every tick, after all @Published
+    /// properties have been set.  Runs on the main queue via GCD — immune to
+    /// RunLoop-mode changes (e.g. NSMenu event-tracking).
+    var onTick: (() -> Void)?
+    
     init() {
         timeRemaining = Int(workInterval)
         startTimer()
@@ -144,6 +149,8 @@ class BreakManager: ObservableObject {
                 }
             }
         }
+        
+        onTick?()
     }
     
     func triggerBreak() {
