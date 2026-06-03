@@ -1,24 +1,43 @@
-<Window x:Class="PauselyWindows.OverlayWindow"
+<ui:FluentWindow x:Class="PauselyWindows.OverlayWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="Pausely Overlay"
         WindowStyle="None"
-        AllowsTransparency="True"
+        WindowBackdropType="Acrylic"
         Topmost="True"
-        Background="#D0000000"
         ShowInTaskbar="False"
         Loaded="Window_Loaded">
+    
     <Grid>
-        <!-- Overlay for darkening the background -->
-        <Rectangle Fill="#A0000000" />
-        
-        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-            <TextBlock x:Name="TitleText" Text="Time to step away" Foreground="White" FontSize="48" FontWeight="Light" HorizontalAlignment="Center" Margin="0,0,0,20"/>
-            <TextBlock x:Name="TimerText" Text="20" Foreground="White" FontSize="120" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,40"/>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                <Button x:Name="SnoozeButton" Content="Snooze" Width="150" Height="40" Margin="0,0,20,0" Click="Snooze_Click" Background="#444" Foreground="White" BorderThickness="0" FontSize="16"/>
-                <Button Content="Lock Screen" Width="150" Height="40" Click="LockScreen_Click" Background="#444" Foreground="White" BorderThickness="0" FontSize="16"/>
+        <!-- The Floating Card -->
+        <Border HorizontalAlignment="Center" VerticalAlignment="Center" 
+                Background="{DynamicResource SolidBackgroundFillColorBaseBrush}" 
+                CornerRadius="8" Padding="40" 
+                BorderBrush="{DynamicResource SurfaceStrokeColorDefaultBrush}" BorderThickness="1">
+            <Border.Effect>
+                <DropShadowEffect Color="Black" Direction="270" ShadowDepth="4" BlurRadius="20" Opacity="0.5"/>
+            </Border.Effect>
+            
+            <StackPanel>
+                <TextBlock x:Name="TitleText" Text="Time to step away" Foreground="{DynamicResource TextFillColorPrimaryBrush}" 
+                           FontFamily="Segoe UI Variable Display" FontSize="48" FontWeight="SemiLight" 
+                           HorizontalAlignment="Center" Margin="0,0,0,20"/>
+                
+                <TextBlock x:Name="TimerText" Text="20" Foreground="{DynamicResource TextFillColorPrimaryBrush}" 
+                           FontFamily="Segoe UI Variable Display" FontSize="120" FontWeight="Bold" 
+                           HorizontalAlignment="Center" Margin="0,0,0,40"/>
+                
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <ui:Button x:Name="SnoozeButton" Content="Snooze" Width="150" Height="40" 
+                               Margin="0,0,20,0" Click="Snooze_Click" 
+                               Appearance="Secondary" FontFamily="Segoe UI Variable Text" FontSize="16"/>
+                    
+                    <ui:Button x:Name="LockScreenButton" Content="Lock Screen" Width="150" Height="40" 
+                               Click="LockScreen_Click" 
+                               Appearance="Primary" FontFamily="Segoe UI Variable Text" FontSize="16"/>
+                </StackPanel>
             </StackPanel>
-        </StackPanel>
+        </Border>
     </Grid>
-</Window>
+</ui:FluentWindow>

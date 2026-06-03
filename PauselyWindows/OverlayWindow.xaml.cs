@@ -7,57 +7,28 @@ using System.Windows.Media.Imaging;
 
 namespace PauselyWindows
 {
-    public partial class OverlayWindow : Window
+    public partial class OverlayWindow : Wpf.Ui.Controls.FluentWindow
     {
         private BreakManager _breakManager;
         private bool _isIntermission;
 
-        [DllImport("user32.dll", CharSet = CharSet.Auto)]
-        private static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
-
         [DllImport("user32.dll")]
         public static extern bool LockWorkStation();
-
-        private const int SPI_GETDESKWALLPAPER = 0x0073;
-        private const int MAX_PATH = 260;
 
         public OverlayWindow(bool isIntermission = false)
         {
             InitializeComponent();
+            Wpf.Ui.Appearance.SystemThemeWatcher.Watch(this, Wpf.Ui.Controls.WindowBackdropType.Acrylic);
+            
             _breakManager = BreakManager.Shared;
             _isIntermission = isIntermission;
             _breakManager.TimerTicked += BreakManager_TimerTicked;
             _breakManager.BreakEnding += BreakManager_BreakEnding;
             UpdateTimerText();
-            SetBackground();
             SetupIntermissionUI();
         }
 
-        private void SetBackground()
-        {
-            try
-            {
-                string wallpaperPath = new string('\0', MAX_PATH);
-                SystemParametersInfo(SPI_GETDESKWALLPAPER, MAX_PATH, wallpaperPath, 0);
-                wallpaperPath = wallpaperPath.Substring(0, wallpaperPath.IndexOf('\0'));
 
-                if (!string.IsNullOrEmpty(wallpaperPath))
-                {
-                    var bitmap = new BitmapImage(new Uri(wallpaperPath));
-                    var brush = new ImageBrush(bitmap)
-                    {
-                        Stretch = Stretch.UniformToFill
-                    };
-                    
-                    // Darken the wallpaper slightly
-                    this.Background = brush;
-                }
-            }
-            catch
-            {
-                // Fallback is defined in XAML
-            }
-        }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
