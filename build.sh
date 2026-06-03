@@ -3,13 +3,20 @@
 # Exit immediately if any command fails
 set -e
 
-echo "=== Building Pausely MVP ==="
+VERSION=${1:-"1.0.0"}
+
+echo "=== Building Pausely MVP v$VERSION ==="
 
 # 1. Clean previous builds
 echo "Cleaning old build files..."
 rm -rf .build Pausely.app
 
-# 2. Build the Swift Package in release mode
+# 2. Update Info.plist version
+echo "Setting version to $VERSION in Info.plist..."
+plutil -replace CFBundleShortVersionString -string "$VERSION" Info.plist
+plutil -replace CFBundleVersion -string "$VERSION" Info.plist
+
+# 3. Build the Swift Package in release mode
 echo "Compiling swift sources..."
 swift build -c release
 

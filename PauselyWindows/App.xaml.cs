@@ -6,6 +6,8 @@ using System.Windows;
 using System.Windows.Controls;
 using Hardcodet.Wpf.TaskbarNotification;
 using System.Collections.Generic;
+using PauselyWindows.Settings;
+using PauselyWindows.Services;
 
 namespace PauselyWindows
 {
@@ -33,6 +35,23 @@ namespace PauselyWindows
             _breakManager.IntermissionEnded += BreakManager_IntermissionEnded;
 
             UpdateStatusMenu();
+
+            // Set initial toggle states
+            var contextMenu = _taskbarIcon.ContextMenu;
+            var autoUpdateItem = (System.Windows.Controls.MenuItem)contextMenu.FindName("AutoUpdateMenuItem");
+            if (autoUpdateItem != null) autoUpdateItem.IsChecked = AppSettings.Shared.AutoUpdateEnabled;
+            
+            var runOnStartupItem = (System.Windows.Controls.MenuItem)contextMenu.FindName("RunOnStartupMenuItem");
+            if (runOnStartupItem != null) runOnStartupItem.IsChecked = AppSettings.Shared.RunOnStartup;
+
+            // Startup features
+            StartupService.Shared.Reconcile(AppSettings.Shared);
+            
+            UpdateService.Shared.UpdateAvailable += UpdateService_UpdateAvailable;
+            if (AppSettings.Shared.AutoUpdateEnabled)
+            {
+                _ = UpdateService.Shared.CheckForUpdateAsync();
+            }
         }
 
         private void BreakManager_StatusChanged(object sender, EventArgs e)
@@ -230,6 +249,45 @@ namespace PauselyWindows
 
             dialog.Content = stackPanel;
             dialog.ShowDialog();
+        }
+
+        private void AutoUpdate_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.MenuItem menuItem)
+            {
+                AppSettings.Shared.AutoUpdateEnabled = menuItem.IsChecked;
+                AppSettings.Shared.Save();
+            }
+        }
+
+        private void RunOnStartup_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.MenuItem menuItem)
+            {
+                AppSettings.Shared.RunOnStartup = menuItem.IsChecked;
+                AppSettings.Shared.Save();
+                StartupService.Shared.Reconcile(AppSettings.Shared);
+            }
+        }
+
+        private void UpdateService_UpdateAvailable(UpdateInfo info)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                _taskbarIcon.ShowBalloonTip(
+                    "Update Available", 
+                    $"Pausely v{info.Version} is available. Click to install.", 
+                    BalloonIcon.Info);
+
+                _taskbarIcon.TrayBalloonTipClicked -= OnTrayBalloonTipClicked; // Prevent multiple handlers
+                _taskbarIcon.TrayBalloonTipClicked += OnTrayBalloonTipClicked;
+
+                async void OnTrayBalloonTipClicked(object s, RoutedEventArgs e)
+                {
+                    _taskbarIcon.TrayBalloonTipClicked -= OnTrayBalloonTipClicked;
+                    await UpdateService.Shared.DownloadAndApplyUpdateAsync(info);
+                }
+            });
         }
 
         private void Quit_Click(object sender, RoutedEventArgs e)

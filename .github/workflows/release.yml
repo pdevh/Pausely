@@ -18,7 +18,7 @@ jobs:
       - name: Build macOS app
         run: |
           chmod +x build.sh
-          ./build.sh
+          ./build.sh 1.0.${{ github.run_number }}
 
       - name: Zip macOS app
         run: zip -r Pausely-macOS.zip Pausely.app
@@ -42,7 +42,7 @@ jobs:
 
       - name: Publish Windows app
         run: |
-          dotnet publish PauselyWindows/PauselyWindows.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o out
+          dotnet publish PauselyWindows/PauselyWindows.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:Version=1.0.${{ github.run_number }} -p:FileVersion=1.0.${{ github.run_number }} -o out
 
       - name: Zip Windows app
         run: Compress-Archive -Path out\* -DestinationPath Pausely-Windows.zip

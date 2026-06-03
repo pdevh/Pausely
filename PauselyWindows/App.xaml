@@ -37,6 +37,9 @@
                     <MenuItem Header="60 seconds" Tag="60" Click="BreakDuration_Click" />
                 </MenuItem>
                 <Separator />
+                <MenuItem x:Name="AutoUpdateMenuItem" Header="Auto-Update" IsCheckable="True" Click="AutoUpdate_Click" />
+                <MenuItem x:Name="RunOnStartupMenuItem" Header="Run on Startup" IsCheckable="True" Click="RunOnStartup_Click" />
+                <Separator />
                 <MenuItem Header="Quit Pausely" Click="Quit_Click" />
             </ContextMenu>
         </ResourceDictionary>

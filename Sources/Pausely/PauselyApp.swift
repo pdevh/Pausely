@@ -4,6 +4,53 @@ import AppKit
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         MenuManager.shared.setupMenuBar()
+        
+        // Startup reconciliation
+        StartupService.shared.reconcile()
+        
+        // Auto-update
+        NotificationCenter.default.addObserver(self, selector: #selector(updateAvailable(_:)), name: UpdateService.updateAvailableNotification, object: nil)
+        
+        if AppSettings.shared.autoUpdateEnabled {
+            UpdateService.shared.checkForUpdate()
+        }
+    }
+    
+    @objc func updateAvailable(_ notification: Notification) {
+        guard let updateInfo = notification.object as? UpdateInfo else { return }
+        
+        let alert = NSAlert()
+        alert.messageText = "Update Available"
+        alert.informativeText = "Pausely v\(updateInfo.version) is available. Update now?"
+        alert.addButton(withTitle: "Update")
+        alert.addButton(withTitle: "Later")
+        
+        // Bring app to front
+        NSApp.activate(ignoringOtherApps: true)
+        
+        if alert.runModal() == .alertFirstButtonReturn {
+            // Show a simple progress window while downloading
+            let progressAlert = NSAlert()
+            progressAlert.messageText = "Downloading Update..."
+            progressAlert.informativeText = "Please wait while the update is downloading and installing. The app will restart automatically."
+            
+            // Start the process without blocking
+            DispatchQueue.main.async {
+                UpdateService.shared.downloadAndApplyUpdate(updateInfo) { success in
+                    if !success {
+                        // The progress alert should be closed by now, but we show a new error alert
+                        let errorAlert = NSAlert()
+                        errorAlert.messageText = "Update Failed"
+                        errorAlert.informativeText = "Failed to download or apply the update. Please try again later."
+                        errorAlert.addButton(withTitle: "OK")
+                        errorAlert.runModal()
+                    }
+                }
+            }
+            
+            // Show non-blocking progress by returning immediately after rendering
+            progressAlert.runModal()
+        }
     }
 }
 
@@ -177,6 +224,18 @@ class MenuManager: NSObject, NSMenuDelegate {
         
         menu.addItem(NSMenuItem.separator())
         
+        let autoUpdateItem = NSMenuItem(title: "Auto-Update", action: #selector(autoUpdateSelected(_:)), keyEquivalent: "")
+        autoUpdateItem.target = self
+        autoUpdateItem.state = AppSettings.shared.autoUpdateEnabled ? .on : .off
+        menu.addItem(autoUpdateItem)
+        
+        let runOnStartupItem = NSMenuItem(title: "Run on Startup", action: #selector(runOnStartupSelected(_:)), keyEquivalent: "")
+        runOnStartupItem.target = self
+        runOnStartupItem.state = AppSettings.shared.runOnStartup ? .on : .off
+        menu.addItem(runOnStartupItem)
+        
+        menu.addItem(NSMenuItem.separator())
+        
         // Quit action
         let quitItem = NSMenuItem(title: "Quit Pausely", action: #selector(quitClicked), keyEquivalent: "q")
         quitItem.target = self
@@ -251,6 +310,24 @@ class MenuManager: NSObject, NSMenuDelegate {
             breakManager.breakDuration = value
             buildMenu()
         }
+    }
+    
+    @objc private func autoUpdateSelected(_ sender: NSMenuItem) {
+        let newValue = !AppSettings.shared.autoUpdateEnabled
+        AppSettings.shared.autoUpdateEnabled = newValue
+        sender.state = newValue ? .on : .off
+        
+        if newValue {
+            UpdateService.shared.checkForUpdate()
+        }
+    }
+    
+    @objc private func runOnStartupSelected(_ sender: NSMenuItem) {
+        let newValue = !AppSettings.shared.runOnStartup
+        AppSettings.shared.runOnStartup = newValue
+        sender.state = newValue ? .on : .off
+        
+        StartupService.shared.reconcile()
     }
     
     @objc private func quitClicked() {
