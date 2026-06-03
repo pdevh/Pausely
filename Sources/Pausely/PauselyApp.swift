@@ -259,7 +259,11 @@ class MenuManager: NSObject, NSMenuDelegate {
     }
     
     @objc private func startBreakClicked() {
-        breakManager.startIntermission()
+        if breakManager.isSyncedSession {
+            breakManager.startIntermission()
+        } else {
+            breakManager.triggerBreak()
+        }
     }
     
     @objc private func copySessionCodeClicked() {

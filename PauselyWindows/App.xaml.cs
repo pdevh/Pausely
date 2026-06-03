@@ -111,7 +111,7 @@ namespace PauselyWindows
             Dispatcher.Invoke(() =>
             {
                 // Play Sound
-                System.Media.SystemSounds.Exclamation.Play();
+                SoundManager.PlayStartSound();
 
                 _overlayWindows.Clear();
                 foreach (var screen in System.Windows.Forms.Screen.AllScreens)
@@ -132,7 +132,7 @@ namespace PauselyWindows
             Dispatcher.Invoke(() =>
             {
                 // Play Sound
-                System.Media.SystemSounds.Asterisk.Play();
+                SoundManager.PlayEndSound();
 
                 foreach (var window in _overlayWindows)
                 {
@@ -144,7 +144,14 @@ namespace PauselyWindows
 
         private void StartBreak_Click(object sender, RoutedEventArgs e)
         {
-            _breakManager.StartIntermission();
+            if (_breakManager.IsSyncedSession)
+            {
+                _breakManager.StartIntermission();
+            }
+            else
+            {
+                _breakManager.TriggerBreak();
+            }
         }
 
         private void LeaveSession_Click(object sender, RoutedEventArgs e)
@@ -156,7 +163,7 @@ namespace PauselyWindows
         {
             Dispatcher.Invoke(() =>
             {
-                System.Media.SystemSounds.Exclamation.Play();
+                SoundManager.PlayStartSound();
 
                 _overlayWindows.Clear();
                 foreach (var screen in System.Windows.Forms.Screen.AllScreens)
@@ -176,7 +183,7 @@ namespace PauselyWindows
         {
             Dispatcher.Invoke(() =>
             {
-                System.Media.SystemSounds.Asterisk.Play();
+                SoundManager.PlayEndSound();
 
                 foreach (var window in _overlayWindows)
                 {

@@ -29,6 +29,7 @@ mkdir -p Pausely.app/Contents/Resources
 echo "Copying binary and Info.plist..."
 cp .build/release/Pausely Pausely.app/Contents/MacOS/
 cp Info.plist Pausely.app/Contents/
+cp Sources/audio/crystal-glass.wav Pausely.app/Contents/Resources/
 
 # 5. Set executable permissions
 chmod +x Pausely.app/Contents/MacOS/Pausely
