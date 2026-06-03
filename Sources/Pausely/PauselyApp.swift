@@ -19,12 +19,47 @@ struct PauselyApp: App {
     }
 }
 
+/// A lightweight NSView used as the `view` of the status NSMenuItem.
+/// Updating its label does NOT trigger NSMenu layout invalidation,
+/// so neighbouring items keep their native hover highlight intact.
+class StatusMenuItemView: NSView {
+    private let label = NSTextField(labelWithString: "")
+    
+    var text: String {
+        get { label.stringValue }
+        set {
+            guard label.stringValue != newValue else { return }
+            label.stringValue = newValue
+        }
+    }
+    
+    init(text: String) {
+        super.init(frame: .zero)
+        label.stringValue = text
+        label.font = NSFont.menuFont(ofSize: 0) // system menu font & size
+        label.textColor = .secondaryLabelColor
+        label.isEditable = false
+        label.isBordered = false
+        label.backgroundColor = .clear
+        label.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(label)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+            label.topAnchor.constraint(equalTo: topAnchor, constant: 2),
+            label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -2)
+        ])
+    }
+    
+    required init?(coder: NSCoder) { fatalError() }
+}
+
 class MenuManager: NSObject, NSMenuDelegate {
     static let shared = MenuManager()
     
     private var statusItem: NSStatusItem?
     private let breakManager = BreakManager.shared
-    private var statusMenuItem: NSMenuItem?
+    private var statusMenuItemView: StatusMenuItemView?
     private var cancellables = Set<AnyCancellable>()
     
     func setupMenuBar() {
@@ -65,13 +100,12 @@ class MenuManager: NSObject, NSMenuDelegate {
         }
         button.title = titleText
         
-        // Update the status item in the menu dropdown in-place
-        if let statusItem = statusMenuItem {
-            let statusText = breakManager.status == .inBreak ? "Break in progress" : "Next break in \(timeFormatted(breakManager.timeRemaining))"
-            if statusItem.title != statusText {
-                statusItem.title = statusText
-            }
-        }
+        // Update the custom view label in the dropdown — this avoids
+        // NSMenu layout invalidation that would reset hover highlights
+        let statusText = breakManager.status == .inBreak
+            ? "Break in progress"
+            : "Next break in \(timeFormatted(breakManager.timeRemaining))"
+        statusMenuItemView?.text = statusText
     }
     
     func buildMenu() {
@@ -84,12 +118,16 @@ class MenuManager: NSObject, NSMenuDelegate {
         headerItem.isEnabled = false
         menu.addItem(headerItem)
         
-        // Status indicator (time remaining)
-        let statusText = breakManager.status == .inBreak ? "Break in progress" : "Next break in \(timeFormatted(breakManager.timeRemaining))"
-        let statusItem = NSMenuItem(title: statusText, action: nil, keyEquivalent: "")
-        statusItem.isEnabled = false
-        self.statusMenuItem = statusItem
-        menu.addItem(statusItem)
+        // Status indicator (time remaining) — uses a custom view so
+        // per-second updates don't disturb native hover on other items
+        let statusText = breakManager.status == .inBreak
+            ? "Break in progress"
+            : "Next break in \(timeFormatted(breakManager.timeRemaining))"
+        let customView = StatusMenuItemView(text: statusText)
+        self.statusMenuItemView = customView
+        let statusMenuItem = NSMenuItem()
+        statusMenuItem.view = customView
+        menu.addItem(statusMenuItem)
         
         menu.addItem(NSMenuItem.separator())
         
@@ -235,5 +273,10 @@ class MenuManager: NSObject, NSMenuDelegate {
     
     func menuWillOpen(_ menu: NSMenu) {
         buildMenu()
+    }
+    
+    func menuDidClose(_ menu: NSMenu) {
+        // The custom view will be recreated on next open via buildMenu
+        statusMenuItemView = nil
     }
 }
