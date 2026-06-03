@@ -64,16 +64,16 @@ namespace PauselyWindows
             }
         }
 
-        private DispatcherTimer _timer;
+        private DispatcherTimer? _timer;
         private bool _isEnding = false;
 
-        public event EventHandler StatusChanged;
-        public event EventHandler TimerTicked;
-        public event EventHandler BreakTriggered;
-        public event EventHandler BreakEnding;
-        public event EventHandler BreakEnded;
-        public event EventHandler IntermissionTriggered;
-        public event EventHandler IntermissionEnded;
+        public event EventHandler? StatusChanged;
+        public event EventHandler? TimerTicked;
+        public event EventHandler? BreakTriggered;
+        public event EventHandler? BreakEnding;
+        public event EventHandler? BreakEnded;
+        public event EventHandler? IntermissionTriggered;
+        public event EventHandler? IntermissionEnded;
 
         private const double REVERSE_ANIMATION_DURATION_SECONDS = 1.15;
         private const double TEST_MODE_THRESHOLD = 15;

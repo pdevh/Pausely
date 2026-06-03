@@ -71,12 +71,12 @@ namespace PauselyWindows
             this.BeginAnimation(Window.OpacityProperty, animation);
         }
 
-        private void BreakManager_TimerTicked(object sender, EventArgs e)
+        private void BreakManager_TimerTicked(object? sender, EventArgs e)
         {
             UpdateTimerText();
         }
 
-        private void BreakManager_BreakEnding(object sender, EventArgs e)
+        private void BreakManager_BreakEnding(object? sender, EventArgs e)
         {
             Dispatcher.Invoke(() =>
             {
