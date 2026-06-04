@@ -17,6 +17,8 @@ namespace PauselyWindows.Settings
 
         public bool AutoUpdateEnabled { get; set; } = false;
         public bool RunOnStartup { get; set; } = false;
+        public double WorkInterval { get; set; } = 1200;
+        public double BreakDuration { get; set; } = 20;
 
         private AppSettings()
         {
@@ -37,6 +39,8 @@ namespace PauselyWindows.Settings
                         {
                             AutoUpdateEnabled = data.AutoUpdateEnabled;
                             RunOnStartup = data.RunOnStartup;
+                            if (data.WorkInterval > 0) WorkInterval = data.WorkInterval;
+                            if (data.BreakDuration > 0) BreakDuration = data.BreakDuration;
                         }
                     }
                 }
@@ -57,7 +61,9 @@ namespace PauselyWindows.Settings
                     var data = new SettingsData
                     {
                         AutoUpdateEnabled = this.AutoUpdateEnabled,
-                        RunOnStartup = this.RunOnStartup
+                        RunOnStartup = this.RunOnStartup,
+                        WorkInterval = this.WorkInterval,
+                        BreakDuration = this.BreakDuration
                     };
                     string json = JsonSerializer.Serialize(data, new JsonSerializerOptions
                     {
@@ -76,6 +82,8 @@ namespace PauselyWindows.Settings
         {
             public bool AutoUpdateEnabled { get; set; }
             public bool RunOnStartup { get; set; }
+            public double WorkInterval { get; set; } = 1200;
+            public double BreakDuration { get; set; } = 20;
         }
     }
 }

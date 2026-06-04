@@ -94,6 +94,11 @@ namespace PauselyWindows
             _timer.Start();
         }
 
+        public void StopTimer()
+        {
+            _timer?.Stop();
+        }
+
         private void Tick()
         {
             // Handle intermission countdown independently
@@ -151,6 +156,12 @@ namespace PauselyWindows
                     else
                     {
                         _snoozeEndTime = null;
+                        if (newStatus == BreakStatus.InBreak)
+                        {
+                            _skippedCycleIndices.Add(currentCycleIndex);
+                            newStatus = BreakStatus.Working;
+                            newTimeRemaining = (cycleDuration - cyclePosition) + WorkInterval;
+                        }
                     }
                 }
 
@@ -194,6 +205,7 @@ namespace PauselyWindows
 
         public void TriggerBreak()
         {
+            if (_isEnding) return;
             Status = BreakStatus.InBreak;
             _lastBreakDisplayedTime = DateTime.Now;
             if (!IsSyncedSession)
@@ -336,11 +348,11 @@ namespace PauselyWindows
                     }
 
                     _isApplyingSync = true;
-                    WorkInterval = double.Parse(parts[0]);
-                    BreakDuration = double.Parse(parts[1]);
+                    WorkInterval = double.Parse(parts[0], System.Globalization.CultureInfo.InvariantCulture);
+                    BreakDuration = double.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture);
                     _isApplyingSync = false;
 
-                    _anchorTimestamp = double.Parse(parts[2]);
+                    _anchorTimestamp = double.Parse(parts[2], System.Globalization.CultureInfo.InvariantCulture);
                     IsSyncedSession = true;
                     _skippedCycleIndices.Clear();
                     _snoozeEndTime = null;

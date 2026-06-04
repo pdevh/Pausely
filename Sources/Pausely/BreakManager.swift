@@ -35,8 +35,9 @@ class BreakManager: ObservableObject {
     }
     
     // Configurations
-    @Published var workInterval: TimeInterval = 1200 { // 20 minutes
+    @Published var workInterval: TimeInterval = AppSettings.shared.workInterval {
         didSet {
+            AppSettings.shared.workInterval = workInterval
             if !isApplyingSync {
                 isSyncedSession = false
             }
@@ -45,8 +46,9 @@ class BreakManager: ObservableObject {
             }
         }
     }
-    @Published var breakDuration: TimeInterval = 20 { // 20 seconds
+    @Published var breakDuration: TimeInterval = AppSettings.shared.breakDuration {
         didSet {
+            AppSettings.shared.breakDuration = breakDuration
             if !isApplyingSync {
                 isSyncedSession = false
             }
@@ -123,6 +125,11 @@ class BreakManager: ObservableObject {
                 } else {
                     snoozeEndTime = nil
                     // Will naturally fall back to math on next tick
+                    if newStatus == .inBreak {
+                        skippedCycleIndices.insert(currentCycleIndex)
+                        newStatus = .working
+                        newTimeRemaining = (cycleDuration - cyclePosition) + workInterval
+                    }
                 }
             }
             
@@ -154,6 +161,8 @@ class BreakManager: ObservableObject {
     }
     
     func triggerBreak() {
+        guard !isEnding else { return }
+        
         status = .inBreak
         lastBreakDisplayedTime = Date()
         

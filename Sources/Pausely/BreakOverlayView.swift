@@ -341,15 +341,9 @@ struct BreakOverlayView: View {
                 
                 // Schedule forward animation phases
                 playForwardAnimation()
-                
-                // Listen for reverse trigger from BreakManager
-                NotificationCenter.default.addObserver(
-                    forName: .breakWillEnd,
-                    object: nil,
-                    queue: .main
-                ) { _ in
-                    playReverseAnimation()
-                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .breakWillEnd)) { _ in
+                playReverseAnimation()
             }
         }
     }

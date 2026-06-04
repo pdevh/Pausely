@@ -19,6 +19,14 @@ namespace PauselyWindows
 
         private void Application_Startup(object sender, StartupEventArgs e)
         {
+            DispatcherUnhandledException += (s, args) =>
+            {
+                args.Handled = true;
+            };
+            AppDomain.CurrentDomain.UnhandledException += (s, args) =>
+            {
+                // Graceful exit
+            };
             _taskbarIcon = new TaskbarIcon
             {
                 Icon = SystemIcons.Application,
@@ -27,6 +35,8 @@ namespace PauselyWindows
             };
 
             _breakManager = BreakManager.Shared;
+            _breakManager.WorkInterval = AppSettings.Shared.WorkInterval;
+            _breakManager.BreakDuration = AppSettings.Shared.BreakDuration;
             _breakManager.StatusChanged += BreakManager_StatusChanged;
             _breakManager.TimerTicked += BreakManager_TimerTicked;
             _breakManager.BreakTriggered += BreakManager_BreakTriggered;
@@ -71,10 +81,7 @@ namespace PauselyWindows
                 var contextMenu = _taskbarIcon.ContextMenu;
                 if (contextMenu == null) return;
                 
-                var headerItem = (System.Windows.Controls.MenuItem)contextMenu.Items[0];
-                headerItem.Header = _breakManager.IsSyncedSession ? "Pausely MVP (Synced)" : "Pausely MVP";
-
-                var statusItem = (System.Windows.Controls.MenuItem)contextMenu.Items[1];
+                var statusItem = (System.Windows.Controls.MenuItem)contextMenu.FindName("StatusMenuItem");
                 
                 if (_breakManager.Status == BreakStatus.InBreak)
                 {
@@ -86,6 +93,18 @@ namespace PauselyWindows
                     string timeFormatted = $"{_breakManager.TimeRemaining / 60:D2}:{_breakManager.TimeRemaining % 60:D2}";
                     statusItem.Header = $"Next break in {timeFormatted}";
                     _taskbarIcon.ToolTipText = $"Next break in {timeFormatted}";
+                }
+
+                if (statusItem.Icon is Wpf.Ui.Controls.ProgressRing progressRing)
+                {
+                    double progress = 1.0 - ((double)_breakManager.TimeRemaining / _breakManager.WorkInterval);
+                    progressRing.Progress = Math.Max(0.0, Math.Min(100.0, progress * 100));
+                }
+
+                var startBreakMenuItem = (System.Windows.Controls.MenuItem)contextMenu.FindName("StartBreakButton");
+                if (startBreakMenuItem != null)
+                {
+                    startBreakMenuItem.Header = _breakManager.IsSyncedSession ? "Start Intermission" : "Start Break Now";
                 }
 
                 // Dynamically show/hide Leave Session and enable/disable settings
@@ -113,14 +132,20 @@ namespace PauselyWindows
                 // Play Sound
                 SoundManager.PlayStartSound();
 
+                foreach (var window in _overlayWindows)
+                {
+                    window.Close();
+                }
                 _overlayWindows.Clear();
+
                 foreach (var screen in System.Windows.Forms.Screen.AllScreens)
                 {
                     var window = new OverlayWindow();
-                    window.Left = screen.Bounds.Left;
-                    window.Top = screen.Bounds.Top;
-                    window.Width = screen.Bounds.Width;
-                    window.Height = screen.Bounds.Height;
+                    var dpiScale = System.Windows.Media.VisualTreeHelper.GetDpi(window);
+                    window.Left = screen.Bounds.Left / dpiScale.DpiScaleX;
+                    window.Top = screen.Bounds.Top / dpiScale.DpiScaleY;
+                    window.Width = screen.Bounds.Width / dpiScale.DpiScaleX;
+                    window.Height = screen.Bounds.Height / dpiScale.DpiScaleY;
                     window.Show();
                     _overlayWindows.Add(window);
                 }
@@ -144,6 +169,11 @@ namespace PauselyWindows
 
         private void StartBreak_Click(object sender, RoutedEventArgs e)
         {
+            if (_taskbarIcon?.ContextMenu != null)
+            {
+                _taskbarIcon.ContextMenu.IsOpen = false;
+            }
+
             if (_breakManager.IsSyncedSession)
             {
                 _breakManager.StartIntermission();
@@ -165,14 +195,20 @@ namespace PauselyWindows
             {
                 SoundManager.PlayStartSound();
 
+                foreach (var window in _overlayWindows)
+                {
+                    window.Close();
+                }
                 _overlayWindows.Clear();
+
                 foreach (var screen in System.Windows.Forms.Screen.AllScreens)
                 {
                     var window = new OverlayWindow(isIntermission: true);
-                    window.Left = screen.Bounds.Left;
-                    window.Top = screen.Bounds.Top;
-                    window.Width = screen.Bounds.Width;
-                    window.Height = screen.Bounds.Height;
+                    var dpiScale = System.Windows.Media.VisualTreeHelper.GetDpi(window);
+                    window.Left = screen.Bounds.Left / dpiScale.DpiScaleX;
+                    window.Top = screen.Bounds.Top / dpiScale.DpiScaleY;
+                    window.Width = screen.Bounds.Width / dpiScale.DpiScaleX;
+                    window.Height = screen.Bounds.Height / dpiScale.DpiScaleY;
                     window.Show();
                     _overlayWindows.Add(window);
                 }
@@ -203,6 +239,8 @@ namespace PauselyWindows
             if (int.TryParse(menuItem.Tag.ToString(), out int seconds))
             {
                 _breakManager.WorkInterval = seconds;
+                AppSettings.Shared.WorkInterval = seconds;
+                AppSettings.Shared.Save();
             }
         }
 
@@ -216,6 +254,8 @@ namespace PauselyWindows
             if (int.TryParse(menuItem.Tag.ToString(), out int seconds))
             {
                 _breakManager.BreakDuration = seconds;
+                AppSettings.Shared.BreakDuration = seconds;
+                AppSettings.Shared.Save();
             }
         }
 
@@ -291,14 +331,29 @@ namespace PauselyWindows
 
                 async void OnTrayBalloonTipClicked(object s, RoutedEventArgs e)
                 {
-                    _taskbarIcon.TrayBalloonTipClicked -= OnTrayBalloonTipClicked;
-                    await UpdateService.Shared.DownloadAndApplyUpdateAsync(info);
+                    try
+                    {
+                        _taskbarIcon.TrayBalloonTipClicked -= OnTrayBalloonTipClicked;
+                        bool success = await UpdateService.Shared.DownloadAndApplyUpdateAsync(info);
+                        if (success)
+                        {
+                            _taskbarIcon?.Dispose();
+                            Current.Shutdown();
+                        }
+                    }
+                    catch { /* Log error */ }
                 }
             });
         }
 
         private void Quit_Click(object sender, RoutedEventArgs e)
         {
+            _breakManager.StopTimer();
+            foreach (var window in _overlayWindows)
+            {
+                window.Close();
+            }
+            _overlayWindows.Clear();
             _taskbarIcon?.Dispose();
             Current.Shutdown();
         }

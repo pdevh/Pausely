@@ -18,7 +18,11 @@ namespace PauselyWindows
         public OverlayWindow(bool isIntermission = false)
         {
             InitializeComponent();
-            Wpf.Ui.Appearance.SystemThemeWatcher.Watch(this, Wpf.Ui.Controls.WindowBackdropType.Acrylic);
+            try
+            {
+                Wpf.Ui.Appearance.SystemThemeWatcher.Watch(this, Wpf.Ui.Controls.WindowBackdropType.Acrylic);
+            }
+            catch { }
             
             _breakManager = BreakManager.Shared;
             _isIntermission = isIntermission;
@@ -49,6 +53,7 @@ namespace PauselyWindows
 
         private void BreakManager_BreakEnding(object? sender, EventArgs e)
         {
+            if (!this.IsLoaded || !this.IsVisible) return;
             Dispatcher.Invoke(() =>
             {
                 // Fade out animation
@@ -64,8 +69,10 @@ namespace PauselyWindows
 
         private void UpdateTimerText()
         {
+            if (!this.IsLoaded) return;
             Dispatcher.Invoke(() =>
             {
+                if (TimerText == null) return;
                 int remaining = _isIntermission ? _breakManager.IntermissionTimeRemaining : _breakManager.TimeRemaining;
                 if (remaining >= 60)
                 {

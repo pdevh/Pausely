@@ -8,6 +8,8 @@ class AppSettings {
     private enum Keys {
         static let autoUpdateEnabled = "autoUpdateEnabled"
         static let runOnStartup = "runOnStartup"
+        static let workInterval = "workInterval"
+        static let breakDuration = "breakDuration"
     }
     
     var autoUpdateEnabled: Bool {
@@ -20,11 +22,23 @@ class AppSettings {
         set { defaults.set(newValue, forKey: Keys.runOnStartup) }
     }
     
+    var workInterval: TimeInterval {
+        get { defaults.double(forKey: Keys.workInterval) }
+        set { defaults.set(newValue, forKey: Keys.workInterval) }
+    }
+    
+    var breakDuration: TimeInterval {
+        get { defaults.double(forKey: Keys.breakDuration) }
+        set { defaults.set(newValue, forKey: Keys.breakDuration) }
+    }
+    
     private init() {
-        // Register defaults — both false (explicit opt-in)
+        // Register defaults
         defaults.register(defaults: [
             Keys.autoUpdateEnabled: false,
-            Keys.runOnStartup: false
+            Keys.runOnStartup: false,
+            Keys.workInterval: 1200.0,
+            Keys.breakDuration: 20.0
         ])
     }
 }

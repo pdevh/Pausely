@@ -29,16 +29,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         
         if alert.runModal() == .alertFirstButtonReturn {
-            // Show a simple progress window while downloading
-            let progressAlert = NSAlert()
-            progressAlert.messageText = "Downloading Update..."
-            progressAlert.informativeText = "Please wait while the update is downloading and installing. The app will restart automatically."
-            
             // Start the process without blocking
             DispatchQueue.main.async {
                 UpdateService.shared.downloadAndApplyUpdate(updateInfo) { success in
                     if !success {
-                        // The progress alert should be closed by now, but we show a new error alert
                         let errorAlert = NSAlert()
                         errorAlert.messageText = "Update Failed"
                         errorAlert.informativeText = "Failed to download or apply the update. Please try again later."
@@ -47,9 +41,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                 }
             }
-            
-            // Show non-blocking progress by returning immediately after rendering
-            progressAlert.runModal()
         }
     }
 }
@@ -70,6 +61,7 @@ struct PauselyApp: App {
 /// so neighbouring items keep their native hover highlight intact.
 class StatusMenuItemView: NSView {
     private let label = NSTextField(labelWithString: "")
+    private let progressIndicator = NSProgressIndicator()
     
     var text: String {
         get { label.stringValue }
@@ -80,22 +72,86 @@ class StatusMenuItemView: NSView {
         }
     }
     
+    var progress: Double {
+        get { progressIndicator.doubleValue }
+        set { progressIndicator.doubleValue = newValue }
+    }
+    
     init(text: String) {
-        super.init(frame: .zero)
+        super.init(frame: NSRect(x: 0, y: 0, width: 220, height: 32))
+        
+        progressIndicator.style = .spinning
+        progressIndicator.isDisplayedWhenStopped = true
+        progressIndicator.isIndeterminate = false
+        progressIndicator.minValue = 0
+        progressIndicator.maxValue = 1
+        progressIndicator.controlSize = .small
+        progressIndicator.translatesAutoresizingMaskIntoConstraints = false
+        
         label.stringValue = text
-        label.font = NSFont.menuFont(ofSize: 0) // system menu font & size
-        label.textColor = .secondaryLabelColor
+        label.font = NSFont.systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
+        label.textColor = .labelColor
         label.isEditable = false
         label.isBordered = false
         label.backgroundColor = .clear
         label.translatesAutoresizingMaskIntoConstraints = false
+        
+        addSubview(progressIndicator)
         addSubview(label)
+        
         NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            progressIndicator.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            progressIndicator.centerYAnchor.constraint(equalTo: centerYAnchor),
+            
+            label.leadingAnchor.constraint(equalTo: progressIndicator.trailingAnchor, constant: 8),
             label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
-            label.topAnchor.constraint(equalTo: topAnchor, constant: 2),
-            label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -2)
+            label.centerYAnchor.constraint(equalTo: centerYAnchor)
         ])
+    }
+    
+    required init?(coder: NSCoder) { fatalError() }
+}
+
+class PrimaryButtonMenuItemView: NSView {
+    private let button = NSButton()
+    private weak var target: AnyObject?
+    private var action: Selector?
+    
+    var title: String {
+        get { button.title }
+        set { button.title = newValue }
+    }
+    
+    init(title: String, target: AnyObject?, action: Selector?) {
+        super.init(frame: NSRect(x: 0, y: 0, width: 220, height: 40))
+        self.target = target
+        self.action = action
+        
+        button.title = title
+        button.target = self
+        button.action = #selector(buttonClicked)
+        button.bezelStyle = .rounded
+        button.keyEquivalent = "\r" // Makes it the primary button (accent colored)
+        if #available(macOS 11.0, *) {
+            button.controlSize = .large
+        }
+        button.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(button)
+        NSLayoutConstraint.activate([
+            button.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            button.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+            button.centerYAnchor.constraint(equalTo: centerYAnchor),
+            button.heightAnchor.constraint(equalToConstant: 32)
+        ])
+    }
+    
+    @objc private func buttonClicked() {
+        if let menu = enclosingMenuItem?.menu {
+            menu.cancelTracking()
+        }
+        if let target = target as? NSObject, let action = action {
+            target.perform(action, with: self)
+        }
     }
     
     required init?(coder: NSCoder) { fatalError() }
@@ -147,17 +203,13 @@ class MenuManager: NSObject, NSMenuDelegate {
             ? "Break in progress"
             : "Next break in \(timeFormatted(breakManager.timeRemaining))"
         statusMenuItemView?.text = statusText
+        let progress = 1.0 - (Double(breakManager.timeRemaining) / breakManager.workInterval)
+        statusMenuItemView?.progress = max(0.0, min(1.0, progress))
     }
     
     func buildMenu() {
         guard let menu = statusItem?.menu else { return }
         menu.removeAllItems()
-        
-        // Title Header
-        let headerTitle = breakManager.isSyncedSession ? "Pausely (Synced)" : "Pausely"
-        let headerItem = NSMenuItem(title: headerTitle, action: nil, keyEquivalent: "")
-        headerItem.isEnabled = false
-        menu.addItem(headerItem)
         
         // Status indicator (time remaining) — uses a custom view so
         // per-second updates don't disturb native hover on other items
@@ -170,11 +222,11 @@ class MenuManager: NSObject, NSMenuDelegate {
         statusMenuItem.view = customView
         menu.addItem(statusMenuItem)
         
-        menu.addItem(NSMenuItem.separator())
-        
         // Action: Start Break Now
-        let startBreakItem = NSMenuItem(title: "Start Break Now", action: #selector(startBreakClicked), keyEquivalent: "")
-        startBreakItem.target = self
+        let startBreakItem = NSMenuItem()
+        let buttonTitle = breakManager.isSyncedSession ? "Start Intermission" : "Start Break Now"
+        let primaryButtonView = PrimaryButtonMenuItemView(title: buttonTitle, target: self, action: #selector(startBreakClicked))
+        startBreakItem.view = primaryButtonView
         menu.addItem(startBreakItem)
         
         menu.addItem(NSMenuItem.separator())
@@ -182,15 +234,18 @@ class MenuManager: NSObject, NSMenuDelegate {
         // Collaborative Studying
         let copyCodeItem = NSMenuItem(title: "Copy Session Code", action: #selector(copySessionCodeClicked), keyEquivalent: "")
         copyCodeItem.target = self
+        copyCodeItem.image = NSImage(systemSymbolName: "doc.on.doc", accessibilityDescription: nil)
         menu.addItem(copyCodeItem)
         
         let joinSessionItem = NSMenuItem(title: "Join Session...", action: #selector(joinSessionClicked), keyEquivalent: "")
         joinSessionItem.target = self
+        joinSessionItem.image = NSImage(systemSymbolName: "link.badge.plus", accessibilityDescription: nil)
         menu.addItem(joinSessionItem)
         
         if breakManager.isSyncedSession {
             let leaveSessionItem = NSMenuItem(title: "Leave Session", action: #selector(leaveSessionClicked), keyEquivalent: "")
             leaveSessionItem.target = self
+            leaveSessionItem.image = NSImage(systemSymbolName: "person.fill.xmark", accessibilityDescription: nil)
             menu.addItem(leaveSessionItem)
         }
         
@@ -201,6 +256,7 @@ class MenuManager: NSObject, NSMenuDelegate {
         let workIntervalItem = NSMenuItem(title: "Work Interval", action: nil, keyEquivalent: "")
         workIntervalItem.submenu = workIntervalSubmenu
         workIntervalItem.isEnabled = !breakManager.isSyncedSession
+        workIntervalItem.image = NSImage(systemSymbolName: "clock", accessibilityDescription: nil)
         menu.addItem(workIntervalItem)
         
         let currentInterval = breakManager.workInterval
@@ -214,6 +270,7 @@ class MenuManager: NSObject, NSMenuDelegate {
         let breakDurationItem = NSMenuItem(title: "Break Duration", action: nil, keyEquivalent: "")
         breakDurationItem.submenu = breakDurationSubmenu
         breakDurationItem.isEnabled = !breakManager.isSyncedSession
+        breakDurationItem.image = NSImage(systemSymbolName: "cup.and.saucer", accessibilityDescription: nil)
         menu.addItem(breakDurationItem)
         
         let currentDuration = breakManager.breakDuration
@@ -224,22 +281,28 @@ class MenuManager: NSObject, NSMenuDelegate {
         
         menu.addItem(NSMenuItem.separator())
         
+        let settingsItem = NSMenuItem(title: "Settings", action: nil, keyEquivalent: "")
+        settingsItem.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: nil)
+        let settingsMenu = NSMenu()
+        settingsItem.submenu = settingsMenu
+        menu.addItem(settingsItem)
+        
         let autoUpdateItem = NSMenuItem(title: "Auto-Update", action: #selector(autoUpdateSelected(_:)), keyEquivalent: "")
         autoUpdateItem.target = self
         autoUpdateItem.state = AppSettings.shared.autoUpdateEnabled ? .on : .off
-        menu.addItem(autoUpdateItem)
+        settingsMenu.addItem(autoUpdateItem)
         
         let runOnStartupItem = NSMenuItem(title: "Run on Startup", action: #selector(runOnStartupSelected(_:)), keyEquivalent: "")
         runOnStartupItem.target = self
         runOnStartupItem.state = AppSettings.shared.runOnStartup ? .on : .off
-        menu.addItem(runOnStartupItem)
+        settingsMenu.addItem(runOnStartupItem)
         
-        menu.addItem(NSMenuItem.separator())
+        settingsMenu.addItem(NSMenuItem.separator())
         
         // Quit action
         let quitItem = NSMenuItem(title: "Quit Pausely", action: #selector(quitClicked), keyEquivalent: "q")
         quitItem.target = self
-        menu.addItem(quitItem)
+        settingsMenu.addItem(quitItem)
     }
     
     private func addIntervalItem(to menu: NSMenu, title: String, value: Double, current: Double) {
@@ -348,6 +411,7 @@ class MenuManager: NSObject, NSMenuDelegate {
     
     func menuWillOpen(_ menu: NSMenu) {
         buildMenu()
+        updateStatusItemLabel()
     }
     
     func menuDidClose(_ menu: NSMenu) {
