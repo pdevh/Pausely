@@ -163,6 +163,7 @@ class MenuManager: NSObject, NSMenuDelegate {
     private var statusItem: NSStatusItem?
     private let breakManager = BreakManager.shared
     private var statusMenuItemView: StatusMenuItemView?
+    private var joinSessionWindow: NSWindow?
     
     func setupMenuBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -339,25 +340,41 @@ class MenuManager: NSObject, NSMenuDelegate {
     @objc private func joinSessionClicked() {
         // Run on main thread but delay slightly if menu is closing
         DispatchQueue.main.async {
-            let alert = NSAlert()
-            alert.messageText = "Join Collaborative Session"
-            alert.informativeText = "Paste the session code below:"
-            alert.addButton(withTitle: "Join")
-            alert.addButton(withTitle: "Cancel")
-            
-            let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 250, height: 24))
-            alert.accessoryView = input
-            
-            // Bring app to foreground to show alert properly
-            NSApp.activate(ignoringOtherApps: true)
-            
-            let response = alert.runModal()
-            if response == .alertFirstButtonReturn {
-                let code = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !code.isEmpty {
-                    self.breakManager.joinSession(code: code)
-                }
+            if let existingWindow = self.joinSessionWindow {
+                existingWindow.close()
             }
+            
+            let view = JoinSessionView(
+                onJoin: { [weak self] code in
+                    self?.breakManager.joinSession(code: code)
+                    self?.joinSessionWindow?.close()
+                    self?.joinSessionWindow = nil
+                },
+                onCancel: { [weak self] in
+                    self?.joinSessionWindow?.close()
+                    self?.joinSessionWindow = nil
+                }
+            )
+            
+            let hostingController = NSHostingController(rootView: view)
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 420, height: 250),
+                styleMask: [.titled, .fullSizeContentView],
+                backing: .buffered,
+                defer: false
+            )
+            window.titlebarAppearsTransparent = true
+            window.titleVisibility = .hidden
+            window.isOpaque = false
+            window.backgroundColor = .clear
+            window.contentViewController = hostingController
+            window.center()
+            window.isReleasedWhenClosed = false
+            
+            self.joinSessionWindow = window
+            
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
         }
     }
     

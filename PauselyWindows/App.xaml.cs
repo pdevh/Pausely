@@ -267,35 +267,8 @@ namespace PauselyWindows
 
         private void JoinSession_Click(object sender, RoutedEventArgs e)
         {
-            var dialog = new System.Windows.Window
-            {
-                Title = "Join Collaborative Session",
-                Width = 350,
-                Height = 150,
-                WindowStartupLocation = WindowStartupLocation.CenterScreen,
-                ResizeMode = ResizeMode.NoResize
-            };
-
-            var stackPanel = new System.Windows.Controls.StackPanel { Margin = new Thickness(15) };
-            var textBox = new System.Windows.Controls.TextBox { Margin = new Thickness(0, 10, 0, 10) };
-            var button = new System.Windows.Controls.Button { Content = "Join", Width = 80, HorizontalAlignment = System.Windows.HorizontalAlignment.Right, Padding = new Thickness(5) };
-
-            button.Click += (s, args) =>
-            {
-                string code = textBox.Text.Trim();
-                if (!string.IsNullOrWhiteSpace(code))
-                {
-                    _breakManager.JoinSession(code);
-                }
-                dialog.Close();
-            };
-
-            stackPanel.Children.Add(new System.Windows.Controls.TextBlock { Text = "Paste the session code below:" });
-            stackPanel.Children.Add(textBox);
-            stackPanel.Children.Add(button);
-
-            dialog.Content = stackPanel;
-            dialog.ShowDialog();
+            var window = new JoinSessionWindow();
+            window.ShowDialog();
         }
 
         private void AutoUpdate_Click(object sender, RoutedEventArgs e)

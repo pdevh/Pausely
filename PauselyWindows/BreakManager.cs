@@ -310,6 +310,35 @@ namespace PauselyWindows
             endTimer.Start();
         }
 
+        private static readonly char[] Base32Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567".ToCharArray();
+
+        private string EncodeBase32(int value)
+        {
+            var result = new char[6];
+            int temp = value;
+            for (int i = 5; i >= 0; i--)
+            {
+                int index = temp & 0x1F;
+                result[i] = Base32Alphabet[index];
+                temp >>= 5;
+            }
+            return new string(result);
+        }
+
+        private int? DecodeBase32(string s)
+        {
+            if (s.Length != 6) return null;
+            int result = 0;
+            string upper = s.ToUpperInvariant();
+            for (int i = 0; i < 6; i++)
+            {
+                int index = Array.IndexOf(Base32Alphabet, upper[i]);
+                if (index < 0) return null;
+                result = (result << 5) | index;
+            }
+            return result;
+        }
+
         public string GenerateSessionCode()
         {
             if (!IsSyncedSession)
@@ -327,47 +356,95 @@ namespace PauselyWindows
                 IsSyncedSession = true;
             }
             
-            string payload = $"{(int)WorkInterval}:{(int)BreakDuration}:{(long)_anchorTimestamp}";
-            var plainTextBytes = System.Text.Encoding.UTF8.GetBytes(payload);
-            return Convert.ToBase64String(plainTextBytes);
+            double[] workIntervals = { 15, 600, 1200, 1800 };
+            double[] breakDurations = { 5, 15, 20, 60 };
+            
+            int wIndex = Array.IndexOf(workIntervals, WorkInterval);
+            if (wIndex < 0) wIndex = 2;
+            int bIndex = Array.IndexOf(breakDurations, BreakDuration);
+            if (bIndex < 0) bIndex = 2;
+            
+            int timestampModulo = (int)_anchorTimestamp % 4194304;
+            int combined = (wIndex << 26) | (bIndex << 22) | timestampModulo;
+            
+            return EncodeBase32(combined);
         }
 
         public void JoinSession(string code)
         {
-            try
+            string cleanCode = code.Trim();
+            
+            double[] workIntervals = { 15, 600, 1200, 1800 };
+            double[] breakDurations = { 5, 15, 20, 60 };
+            
+            double w = 1200;
+            double b = 20;
+            double a = 0;
+            
+            int? combined = DecodeBase32(cleanCode);
+            if (cleanCode.Length == 6 && combined.HasValue)
             {
-                var base64EncodedBytes = Convert.FromBase64String(code);
-                var payload = System.Text.Encoding.UTF8.GetString(base64EncodedBytes);
-                var parts = payload.Split(':');
-                if (parts.Length == 3)
+                int modulo = combined.Value & 0x3FFFFF;
+                int wIndex = (combined.Value >> 26) & 0x0F;
+                int bIndex = (combined.Value >> 22) & 0x0F;
+                
+                w = (wIndex >= 0 && wIndex < workIntervals.Length) ? workIntervals[wIndex] : 1200;
+                b = (bIndex >= 0 && bIndex < breakDurations.Length) ? breakDurations[bIndex] : 20;
+                
+                int current = (int)GetCurrentUnixTime();
+                int window = 4194304;
+                int currentModulo = current % window;
+                int diff = modulo - currentModulo;
+                
+                if (diff > window / 2) diff -= window;
+                else if (diff < -window / 2) diff += window;
+                
+                a = current + diff;
+            }
+            else
+            {
+                try
                 {
-                    if (!IsSyncedSession)
+                    var base64EncodedBytes = Convert.FromBase64String(cleanCode);
+                    var payload = System.Text.Encoding.UTF8.GetString(base64EncodedBytes);
+                    var parts = payload.Split(':');
+                    if (parts.Length == 3)
                     {
-                        _previousWorkInterval = WorkInterval;
-                        _previousBreakDuration = BreakDuration;
+                        w = double.Parse(parts[0], System.Globalization.CultureInfo.InvariantCulture);
+                        b = double.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture);
+                        a = double.Parse(parts[2], System.Globalization.CultureInfo.InvariantCulture);
                     }
-
-                    _isApplyingSync = true;
-                    WorkInterval = double.Parse(parts[0], System.Globalization.CultureInfo.InvariantCulture);
-                    BreakDuration = double.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture);
-                    _isApplyingSync = false;
-
-                    _anchorTimestamp = double.Parse(parts[2], System.Globalization.CultureInfo.InvariantCulture);
-                    IsSyncedSession = true;
-                    _skippedCycleIndices.Clear();
-                    _snoozeEndTime = null;
-                    SnoozesLeft = 4;
-
-                    // If they were in break locally but the code puts them in work, ensure overlays close
-                    if (Status == BreakStatus.InBreak)
+                    else
                     {
-                        BreakEnded?.Invoke(this, EventArgs.Empty);
+                        return;
                     }
                 }
+                catch
+                {
+                    return; // Invalid code
+                }
             }
-            catch
+            
+            if (!IsSyncedSession)
             {
-                // Invalid code
+                _previousWorkInterval = WorkInterval;
+                _previousBreakDuration = BreakDuration;
+            }
+
+            _isApplyingSync = true;
+            WorkInterval = w;
+            BreakDuration = b;
+            _isApplyingSync = false;
+
+            _anchorTimestamp = a;
+            IsSyncedSession = true;
+            _skippedCycleIndices.Clear();
+            _snoozeEndTime = null;
+            SnoozesLeft = 4;
+
+            if (Status == BreakStatus.InBreak)
+            {
+                BreakEnded?.Invoke(this, EventArgs.Empty);
             }
         }
 

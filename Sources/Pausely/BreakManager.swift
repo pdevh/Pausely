@@ -269,6 +269,30 @@ class BreakManager: ObservableObject {
         }
     }
     
+    private let base32Alphabet = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZ234567")
+    
+    private func encodeBase32(_ value: Int) -> String {
+        var result = ""
+        var temp = value
+        for _ in 0..<6 {
+            let index = temp & 0x1F
+            result.insert(base32Alphabet[index], at: result.startIndex)
+            temp >>= 5
+        }
+        return result
+    }
+
+    private func decodeBase32(_ string: String) -> Int? {
+        guard string.count == 6 else { return nil }
+        var result = 0
+        let upperString = string.uppercased()
+        for char in upperString {
+            guard let index = base32Alphabet.firstIndex(of: char) else { return nil }
+            result = (result << 5) | index
+        }
+        return result
+    }
+
     func generateSessionCode() -> String {
         if !isSyncedSession {
             // Backdate the anchor so current timeRemaining is seamless
@@ -281,19 +305,63 @@ class BreakManager: ObservableObject {
             }
             isSyncedSession = true
         }
-        let payload = "\(Int(workInterval)):\(Int(breakDuration)):\(Int(anchorTimestamp))"
-        return payload.data(using: .utf8)?.base64EncodedString() ?? ""
+        
+        let workIntervals: [TimeInterval] = [15, 600, 1200, 1800]
+        let breakDurations: [TimeInterval] = [5, 15, 20, 60]
+        
+        let wIndex = workIntervals.firstIndex(of: workInterval) ?? 2 // Default to 1200
+        let bIndex = breakDurations.firstIndex(of: breakDuration) ?? 2 // Default to 20
+        
+        let timestampModulo = Int(anchorTimestamp) % 4_194_304 // 22 bits
+        let combined: Int = (wIndex << 26) | (bIndex << 22) | timestampModulo
+        
+        return encodeBase32(combined)
     }
     
     func joinSession(code: String) {
-        guard let data = Data(base64Encoded: code),
-              let payload = String(data: data, encoding: .utf8) else { return }
+        let cleanCode = code.trimmingCharacters(in: .whitespacesAndNewlines)
         
-        let parts = payload.split(separator: ":")
-        guard parts.count == 3,
-              let w = TimeInterval(parts[0]),
-              let b = TimeInterval(parts[1]),
-              let a = TimeInterval(parts[2]) else { return }
+        let workIntervals: [TimeInterval] = [15, 600, 1200, 1800]
+        let breakDurations: [TimeInterval] = [5, 15, 20, 60]
+        
+        var w: TimeInterval = 1200
+        var b: TimeInterval = 20
+        var a: TimeInterval = 0
+        
+        if cleanCode.count == 6, let combined = decodeBase32(cleanCode) {
+            let modulo = combined & 0x3FFFFF
+            let wIndex = (combined >> 26) & 0x0F
+            let bIndex = (combined >> 22) & 0x0F
+            
+            w = (wIndex >= 0 && wIndex < workIntervals.count) ? workIntervals[wIndex] : 1200
+            b = (bIndex >= 0 && bIndex < breakDurations.count) ? breakDurations[bIndex] : 20
+            
+            let current = Int(Date().timeIntervalSince1970)
+            let window = 4_194_304
+            let currentModulo = current % window
+            var diff = modulo - currentModulo
+            
+            if diff > window / 2 {
+                diff -= window
+            } else if diff < -window / 2 {
+                diff += window
+            }
+            
+            a = TimeInterval(current + diff)
+        } else if let data = Data(base64Encoded: cleanCode), let payload = String(data: data, encoding: .utf8) {
+            // Legacy Base64
+            let parts = payload.split(separator: ":")
+            guard parts.count == 3,
+                  let wLegacy = TimeInterval(parts[0]),
+                  let bLegacy = TimeInterval(parts[1]),
+                  let aLegacy = TimeInterval(parts[2]) else { return }
+            
+            w = wLegacy
+            b = bLegacy
+            a = aLegacy
+        } else {
+            return // Invalid code
+        }
         
         if !isSyncedSession {
             previousWorkInterval = self.workInterval
