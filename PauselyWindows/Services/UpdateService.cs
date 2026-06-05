@@ -6,6 +6,7 @@ using System.Net.Http;
 using System.Reflection;
 using System.Text.Json;
 using System.Threading.Tasks;
+using PauselyWindows;
 
 namespace PauselyWindows.Services
 {
@@ -49,12 +50,16 @@ namespace PauselyWindows.Services
         {
             try
             {
+                Logger.Info("Checking for application updates from GitHub releases...");
                 // Delay 5 seconds to not block app launch
                 await Task.Delay(5000);
 
                 var response = await _httpClient.GetAsync(GitHubApiUrl);
                 if (!response.IsSuccessStatusCode)
+                {
+                    Logger.Warn($"Update check HTTP request failed. Status code: {response.StatusCode}");
                     return;
+                }
 
                 var json = await response.Content.ReadAsStringAsync();
                 using var doc = JsonDocument.Parse(json);
@@ -65,9 +70,13 @@ namespace PauselyWindows.Services
                 string remoteVersion = tagName.TrimStart('v');
 
                 string currentVersion = GetCurrentVersion();
+                Logger.Info($"Current version: {currentVersion}. Remote version: {remoteVersion}");
 
                 if (!IsNewerVersion(remoteVersion, currentVersion))
+                {
+                    Logger.Info("No new update available.");
                     return;
+                }
 
                 // Find the correct asset
                 string downloadUrl = "";
@@ -88,7 +97,10 @@ namespace PauselyWindows.Services
                 }
 
                 if (string.IsNullOrEmpty(downloadUrl))
+                {
+                    Logger.Warn($"No matching release asset '{AssetName}' found on GitHub remote release.");
                     return;
+                }
 
                 string releaseNotes = root.TryGetProperty("body", out var body) 
                     ? body.GetString() ?? "" 
@@ -102,11 +114,13 @@ namespace PauselyWindows.Services
                     AssetSize = assetSize
                 };
 
+                Logger.Info($"New update details fetched. Size: {assetSize} bytes. URL: {downloadUrl}");
                 UpdateAvailable?.Invoke(updateInfo);
             }
-            catch
+            catch (Exception ex)
             {
                 // Graceful failure — no crash, no UI disruption on network errors
+                Logger.Error("Error checking for updates.", ex);
             }
         }
 
@@ -118,19 +132,25 @@ namespace PauselyWindows.Services
         {
             try
             {
+                Logger.Info($"Downloading and applying update version v{updateInfo.Version}...");
                 string tempDir = Path.Combine(Path.GetTempPath(), "PauselyUpdate");
                 string zipPath = Path.Combine(tempDir, AssetName);
                 string extractDir = Path.Combine(tempDir, "extracted");
 
+                Logger.Info($"Cleaning and preparing temporary update directory: {tempDir}...");
                 // Clean up any previous update attempt
                 if (Directory.Exists(tempDir))
                     Directory.Delete(tempDir, true);
                 Directory.CreateDirectory(tempDir);
 
                 // Download the ZIP
+                Logger.Info($"Downloading update ZIP package from {updateInfo.DownloadUrl}...");
                 var response = await _httpClient.GetAsync(updateInfo.DownloadUrl);
                 if (!response.IsSuccessStatusCode)
+                {
+                    Logger.Error($"Download request failed with HTTP Status: {response.StatusCode}");
                     return false;
+                }
 
                 await using var fileStream = File.Create(zipPath);
                 await response.Content.CopyToAsync(fileStream);
@@ -139,10 +159,15 @@ namespace PauselyWindows.Services
 
                 // Verify file size
                 var downloadedSize = new FileInfo(zipPath).Length;
+                Logger.Info($"Download complete. Size: {downloadedSize} bytes.");
                 if (updateInfo.AssetSize > 0 && downloadedSize != updateInfo.AssetSize)
+                {
+                    Logger.Error($"Size validation failed. Expected: {updateInfo.AssetSize}, Downloaded: {downloadedSize}");
                     return false;
+                }
 
                 // Extract
+                Logger.Info($"Extracting zip content to {extractDir}...");
                 if (Directory.Exists(extractDir))
                     Directory.Delete(extractDir, true);
                 ZipFile.ExtractToDirectory(zipPath, extractDir);
@@ -151,13 +176,17 @@ namespace PauselyWindows.Services
                 // not the extracted single-file runtime temp directory
                 string? currentExePath = Process.GetCurrentProcess().MainModule?.FileName;
                 if (string.IsNullOrEmpty(currentExePath))
+                {
+                    Logger.Error("Unable to retrieve current process executable path.");
                     return false;
+                }
 
                 string installDir = Path.GetDirectoryName(currentExePath)!;
                 string currentPid = Process.GetCurrentProcess().Id.ToString();
 
                 // Write the updater batch script
                 string batchPath = Path.Combine(tempDir, "PauselyUpdater.bat");
+                Logger.Info($"Writing temporary batch updater script to {batchPath}...");
                 string batchContent = $"""
                     @echo off
                     echo Waiting for Pausely to exit...
@@ -180,6 +209,7 @@ namespace PauselyWindows.Services
                 File.WriteAllText(batchPath, batchContent);
 
                 // Launch the batch script detached
+                Logger.Info("Launching batch update script detached...");
                 var startInfo = new ProcessStartInfo
                 {
                     FileName = "cmd.exe",
@@ -190,10 +220,12 @@ namespace PauselyWindows.Services
                 };
                 Process.Start(startInfo);
 
+                Logger.Info("Updater script launched. Ready to exit and apply update.");
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
+                Logger.Error("Exception occurred during update downloading/application.", ex);
                 return false;
             }
         }

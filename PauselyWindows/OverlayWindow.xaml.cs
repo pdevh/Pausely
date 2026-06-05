@@ -18,11 +18,15 @@ namespace PauselyWindows
         public OverlayWindow(bool isIntermission = false)
         {
             InitializeComponent();
+            Logger.Info($"OverlayWindow initializing (IsIntermission = {isIntermission}).");
             try
             {
                 Wpf.Ui.Appearance.SystemThemeWatcher.Watch(this, Wpf.Ui.Controls.WindowBackdropType.Acrylic);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Logger.Warn($"Failed to setup system theme watcher acrylic backdrop. Exception: {ex.Message}");
+            }
             
             _breakManager = BreakManager.Shared;
             _isIntermission = isIntermission;
@@ -36,6 +40,7 @@ namespace PauselyWindows
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
+            Logger.Info("OverlayWindow loaded. Beginning fade-in animation.");
             // Fade in animation
             var animation = new DoubleAnimation
             {
@@ -119,11 +124,13 @@ namespace PauselyWindows
 
         private void LockScreen_Click(object sender, RoutedEventArgs e)
         {
+            Logger.Info("LockScreen clicked inside OverlayWindow. Locking workstation.");
             LockWorkStation();
         }
 
         protected override void OnClosed(EventArgs e)
         {
+            Logger.Info("OverlayWindow closed. Cleaning up event listeners.");
             _breakManager.TimerTicked -= BreakManager_TimerTicked;
             _breakManager.BreakEnding -= BreakManager_BreakEnding;
             base.OnClosed(e);

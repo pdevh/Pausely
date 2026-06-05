@@ -19,13 +19,21 @@ namespace PauselyWindows
 
         private void Application_Startup(object sender, StartupEventArgs e)
         {
+            Logger.Info("Pausely Windows application starting up...");
+
             DispatcherUnhandledException += (s, args) =>
             {
+                Logger.Error("Unhandled Dispatcher Exception", args.Exception);
                 args.Handled = true;
             };
             AppDomain.CurrentDomain.UnhandledException += (s, args) =>
             {
-                // Graceful exit
+                Logger.Fatal("Unhandled AppDomain Exception", args.ExceptionObject as Exception);
+            };
+            System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (s, args) =>
+            {
+                Logger.Error("Unobserved Task Exception", args.Exception);
+                args.SetObserved();
             };
             _taskbarIcon = new TaskbarIcon
             {
@@ -244,6 +252,7 @@ namespace PauselyWindows
 
             if (int.TryParse(menuItem.Tag.ToString(), out int seconds))
             {
+                Logger.Info($"User set work interval to {seconds} seconds.");
                 _breakManager.WorkInterval = seconds;
                 AppSettings.Shared.WorkInterval = seconds;
                 AppSettings.Shared.Save();
@@ -259,6 +268,7 @@ namespace PauselyWindows
 
             if (int.TryParse(menuItem.Tag.ToString(), out int seconds))
             {
+                Logger.Info($"User set break duration to {seconds} seconds.");
                 _breakManager.BreakDuration = seconds;
                 AppSettings.Shared.BreakDuration = seconds;
                 AppSettings.Shared.Save();
@@ -268,13 +278,15 @@ namespace PauselyWindows
         private void CopySessionCode_Click(object sender, RoutedEventArgs e)
         {
             string code = _breakManager.GenerateSessionCode();
+            Logger.Info($"Generated session code for sync: {code}");
             try
             {
                 System.Windows.Clipboard.SetText(code);
+                Logger.Info("Session code copied to clipboard successfully.");
             }
-            catch (System.Runtime.InteropServices.COMException)
+            catch (System.Runtime.InteropServices.COMException ex)
             {
-                // Clipboard is locked by another process
+                Logger.Warn($"Failed to copy session code to clipboard: Clipboard locked by another process. Exception: {ex.Message}");
             }
         }
 
@@ -305,6 +317,7 @@ namespace PauselyWindows
 
         private void UpdateService_UpdateAvailable(UpdateInfo info)
         {
+            Logger.Info($"Update check completed: New version v{info.Version} is available.");
             Dispatcher.Invoke(() =>
             {
                 _taskbarIcon.ShowBalloonTip(
@@ -319,21 +332,31 @@ namespace PauselyWindows
                 {
                     try
                     {
+                        Logger.Info($"User clicked update balloon tip for v{info.Version}. Initiating download...");
                         _taskbarIcon.TrayBalloonTipClicked -= OnTrayBalloonTipClicked;
                         bool success = await UpdateService.Shared.DownloadAndApplyUpdateAsync(info);
                         if (success)
                         {
+                            Logger.Info("Update applied successfully. Shutting down application for restart...");
                             _taskbarIcon?.Dispose();
                             Current.Shutdown();
                         }
+                        else
+                        {
+                            Logger.Error("Failed to apply update.");
+                        }
                     }
-                    catch { /* Log error */ }
+                    catch (Exception ex)
+                    {
+                        Logger.Error("Exception occurred while handling update balloon tip click", ex);
+                    }
                 }
             });
         }
 
         private void Quit_Click(object sender, RoutedEventArgs e)
         {
+            Logger.Info("Pausely Windows application shutting down via Tray Quit click...");
             _breakManager.StopTimer();
             foreach (var window in _overlayWindows)
             {

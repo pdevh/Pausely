@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using Microsoft.Win32;
+using PauselyWindows;
 
 namespace PauselyWindows.Services
 {
@@ -31,12 +32,16 @@ namespace PauselyWindows.Services
         {
             try
             {
+                Logger.Info("Registering application for Windows startup...");
                 using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: true);
-                key?.SetValue(AppName, $"\"{GetExePath()}\"");
+                string exePath = GetExePath();
+                key?.SetValue(AppName, $"\"{exePath}\"");
+                Logger.Info($"Registered startup entry. Path: {exePath}");
             }
-            catch
+            catch (Exception ex)
             {
                 // Best-effort — registry write may fail in sandboxed environments
+                Logger.Error("Failed to register startup registry entry.", ex);
             }
         }
 
@@ -47,12 +52,15 @@ namespace PauselyWindows.Services
         {
             try
             {
+                Logger.Info("Removing application from Windows startup registry...");
                 using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: true);
                 key?.DeleteValue(AppName, throwOnMissingValue: false);
+                Logger.Info("Startup registry entry removed successfully.");
             }
-            catch
+            catch (Exception ex)
             {
                 // Best-effort
+                Logger.Error("Failed to deregister startup registry entry.", ex);
             }
         }
 
@@ -64,10 +72,13 @@ namespace PauselyWindows.Services
             try
             {
                 using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath);
-                return key?.GetValue(AppName) != null;
+                bool isReg = key?.GetValue(AppName) != null;
+                Logger.Info($"Checked startup registry status: {(isReg ? "Registered" : "Not Registered")}");
+                return isReg;
             }
-            catch
+            catch (Exception ex)
             {
+                Logger.Error("Failed to query startup registry key status.", ex);
                 return false;
             }
         }

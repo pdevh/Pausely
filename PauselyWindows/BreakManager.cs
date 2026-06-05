@@ -220,6 +220,7 @@ namespace PauselyWindows
         public void TriggerBreak()
         {
             if (_isEnding) return;
+            Logger.Info("Triggering break.");
             Status = BreakStatus.InBreak;
             _lastBreakDisplayedTime = DateTime.Now;
             if (!IsSyncedSession)
@@ -233,6 +234,7 @@ namespace PauselyWindows
         public void EndBreak()
         {
             if (_isEnding) return;
+            Logger.Info("Ending break.");
             _isEnding = true;
 
             BreakEnding?.Invoke(this, EventArgs.Empty);
@@ -257,6 +259,7 @@ namespace PauselyWindows
         public void SnoozeBreak()
         {
             if (SnoozesLeft <= 0 || _isEnding) return;
+            Logger.Info($"Snoozing break. Snoozes remaining: {SnoozesLeft - 1}");
             SnoozesLeft -= 1;
             _isEnding = true;
 
@@ -288,6 +291,7 @@ namespace PauselyWindows
 
         public void SkipBreak()
         {
+            Logger.Info("Skipping break.");
             if (IsSyncedSession)
             {
                 double cycleDuration = WorkInterval + BreakDuration;
@@ -301,6 +305,7 @@ namespace PauselyWindows
         public void StartIntermission()
         {
             if (IsInIntermission) return;
+            Logger.Info("Starting intermission.");
             IsInIntermission = true;
             IntermissionTimeRemaining = (int)BreakDuration;
             OnPropertyChanged();
@@ -309,6 +314,7 @@ namespace PauselyWindows
 
         public void EndIntermission()
         {
+            Logger.Info("Ending intermission.");
             IsInIntermission = false;
             IntermissionTimeRemaining = 0;
 
@@ -386,6 +392,7 @@ namespace PauselyWindows
 
         public void JoinSession(string code)
         {
+            Logger.Info($"Attempting to join sync session with code: {code}");
             string cleanCode = code.Trim();
             
             double[] workIntervals = { 15, 600, 1200, 1800 };
@@ -430,11 +437,13 @@ namespace PauselyWindows
                     }
                     else
                     {
+                        Logger.Warn($"Failed to join sync session: Code payload length is not 3: {payload}");
                         return;
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
+                    Logger.Warn($"Failed to decode Base64 sync code: {ex.Message}");
                     return; // Invalid code
                 }
             }
@@ -456,6 +465,8 @@ namespace PauselyWindows
             _snoozeEndTime = null;
             SnoozesLeft = 4;
 
+            Logger.Info($"Successfully joined sync session. WorkInterval: {w}, BreakDuration: {b}, AnchorTimestamp: {a}");
+
             if (Status == BreakStatus.InBreak)
             {
                 BreakEnded?.Invoke(this, new BreakEndedEventArgs(isSnoozed: false, playSound: false));
@@ -465,6 +476,7 @@ namespace PauselyWindows
         public void LeaveSession()
         {
             if (!IsSyncedSession) return;
+            Logger.Info("Leaving sync session and restoring previous intervals.");
             IsSyncedSession = false;
 
             _isApplyingSync = true;
@@ -490,6 +502,8 @@ namespace PauselyWindows
             _snoozeEndTime = null;
             SnoozesLeft = 4;
 
+            Logger.Info($"Restored intervals. WorkInterval: {WorkInterval}, BreakDuration: {BreakDuration}, TimeRemaining: {TimeRemaining}");
+
             OnPropertyChanged();
         }
 
@@ -501,10 +515,12 @@ namespace PauselyWindows
 
         private void SessionSwitch(object sender, SessionSwitchEventArgs e)
         {
+            Logger.Info($"SessionSwitch event triggered: {e.Reason}");
             System.Windows.Application.Current?.Dispatcher.Invoke(() =>
             {
                 if (e.Reason == SessionSwitchReason.SessionLock)
                 {
+                    Logger.Info("Session locked. Pausing timer and discarding active breaks/intermissions.");
                     _isScreenLocked = true;
                     _timer?.Stop();
 
@@ -530,6 +546,7 @@ namespace PauselyWindows
                 }
                 else if (e.Reason == SessionSwitchReason.SessionUnlock)
                 {
+                    Logger.Info("Session unlocked. Resuming timer.");
                     if (_isScreenLocked)
                     {
                         _isScreenLocked = false;
