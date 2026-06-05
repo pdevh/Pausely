@@ -61,6 +61,7 @@ class BreakManager: ObservableObject {
     private var gcdTimer: DispatchSourceTimer?
     private let overlayController = OverlayWindowController.shared
     private var isEnding = false // Guards against repeated endBreak/snooze calls during reverse animation
+    private var isScreenLocked = false
     
     /// Direct callback fired at the end of every tick, after all @Published
     /// properties have been set.  Runs on the main queue via GCD — immune to
@@ -70,6 +71,46 @@ class BreakManager: ObservableObject {
     init() {
         timeRemaining = Int(workInterval)
         startTimer()
+        registerScreenLockObservers()
+    }
+    
+    private func registerScreenLockObservers() {
+        let dnc = DistributedNotificationCenter.default()
+        dnc.addObserver(self,
+                        selector: #selector(screenDidLock),
+                        name: NSNotification.Name("com.apple.screenIsLocked"),
+                        object: nil)
+        dnc.addObserver(self,
+                        selector: #selector(screenDidUnlock),
+                        name: NSNotification.Name("com.apple.screenIsUnlocked"),
+                        object: nil)
+    }
+    
+    @objc private func screenDidLock() {
+        isScreenLocked = true
+        gcdTimer?.suspend()
+        // Dismiss any active overlay immediately
+        if status == .inBreak {
+            isEnding = false // allow closeOverlays to work
+            overlayController.closeOverlays()
+            // Restore working state so the cycle resumes correctly on unlock
+            status = .working
+            if !isSyncedSession {
+                timeRemaining = Int(workInterval)
+            }
+            snoozesLeft = 4
+        }
+        if isInIntermission {
+            isInIntermission = false
+            intermissionTimeRemaining = 0
+            overlayController.closeOverlays()
+        }
+    }
+    
+    @objc private func screenDidUnlock() {
+        guard isScreenLocked else { return }
+        isScreenLocked = false
+        gcdTimer?.resume()
     }
     
     func startTimer() {
@@ -228,9 +269,7 @@ class BreakManager: ObservableObject {
             
             // Close overlays
             self.overlayController.closeOverlays()
-            
-            // Play finish sound
-            SoundManager.playEndSound()
+            // No sound when snoozing — silence is intentional
         }
     }
     

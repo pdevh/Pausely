@@ -155,12 +155,15 @@ namespace PauselyWindows
             });
         }
 
-        private void BreakManager_BreakEnded(object sender, EventArgs e)
+        private void BreakManager_BreakEnded(object sender, BreakEndedEventArgs e)
         {
             Dispatcher.Invoke(() =>
             {
                 // Play Sound
-                SoundManager.PlayEndSound();
+                if (e.PlaySound)
+                {
+                    SoundManager.PlayEndSound();
+                }
 
                 foreach (var window in _overlayWindows)
                 {

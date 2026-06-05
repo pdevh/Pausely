@@ -1,9 +1,21 @@
 using System;
 using System.Collections.Generic;
 using System.Windows.Threading;
+using Microsoft.Win32;
 
 namespace PauselyWindows
 {
+    public class BreakEndedEventArgs : EventArgs
+    {
+        public bool IsSnoozed { get; }
+        public bool PlaySound { get; }
+        public BreakEndedEventArgs(bool isSnoozed, bool playSound = true)
+        {
+            IsSnoozed = isSnoozed;
+            PlaySound = playSound;
+        }
+    }
+
     public enum BreakStatus
     {
         Working,
@@ -66,12 +78,13 @@ namespace PauselyWindows
 
         private DispatcherTimer? _timer;
         private bool _isEnding = false;
+        private bool _isScreenLocked = false;
 
         public event EventHandler? StatusChanged;
         public event EventHandler? TimerTicked;
         public event EventHandler? BreakTriggered;
         public event EventHandler? BreakEnding;
-        public event EventHandler? BreakEnded;
+        public event EventHandler<BreakEndedEventArgs>? BreakEnded;
         public event EventHandler? IntermissionTriggered;
         public event EventHandler? IntermissionEnded;
 
@@ -84,6 +97,7 @@ namespace PauselyWindows
         {
             TimeRemaining = (int)WorkInterval;
             StartTimer();
+            SystemEvents.SessionSwitch += SessionSwitch;
         }
 
         public void StartTimer()
@@ -235,7 +249,7 @@ namespace PauselyWindows
                 }
                 SnoozesLeft = 4;
                 OnPropertyChanged();
-                BreakEnded?.Invoke(this, EventArgs.Empty);
+                BreakEnded?.Invoke(this, new BreakEndedEventArgs(isSnoozed: false, playSound: true));
             };
             endTimer.Start();
         }
@@ -267,7 +281,7 @@ namespace PauselyWindows
                 }
 
                 OnPropertyChanged();
-                BreakEnded?.Invoke(this, EventArgs.Empty);
+                BreakEnded?.Invoke(this, new BreakEndedEventArgs(isSnoozed: true, playSound: false));
             };
             endTimer.Start();
         }
@@ -444,7 +458,7 @@ namespace PauselyWindows
 
             if (Status == BreakStatus.InBreak)
             {
-                BreakEnded?.Invoke(this, EventArgs.Empty);
+                BreakEnded?.Invoke(this, new BreakEndedEventArgs(isSnoozed: false, playSound: false));
             }
         }
 
@@ -483,6 +497,46 @@ namespace PauselyWindows
         {
             StatusChanged?.Invoke(this, EventArgs.Empty);
             TimerTicked?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void SessionSwitch(object sender, SessionSwitchEventArgs e)
+        {
+            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            {
+                if (e.Reason == SessionSwitchReason.SessionLock)
+                {
+                    _isScreenLocked = true;
+                    _timer?.Stop();
+
+                    if (Status == BreakStatus.InBreak)
+                    {
+                        _isEnding = false;
+                        Status = BreakStatus.Working;
+                        if (!IsSyncedSession)
+                        {
+                            TimeRemaining = (int)WorkInterval;
+                        }
+                        SnoozesLeft = 4;
+                        OnPropertyChanged();
+                        BreakEnded?.Invoke(this, new BreakEndedEventArgs(isSnoozed: false, playSound: false));
+                    }
+                    if (IsInIntermission)
+                    {
+                        IsInIntermission = false;
+                        IntermissionTimeRemaining = 0;
+                        OnPropertyChanged();
+                        IntermissionEnded?.Invoke(this, EventArgs.Empty);
+                    }
+                }
+                else if (e.Reason == SessionSwitchReason.SessionUnlock)
+                {
+                    if (_isScreenLocked)
+                    {
+                        _isScreenLocked = false;
+                        _timer?.Start();
+                    }
+                }
+            });
         }
     }
 }
