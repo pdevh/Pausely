@@ -83,28 +83,31 @@ namespace PauselyWindows
                 
                 var statusItem = (System.Windows.Controls.MenuItem)contextMenu.FindName("StatusMenuItem");
                 
-                if (_breakManager.Status == BreakStatus.InBreak)
+                if (statusItem != null)
                 {
-                    statusItem.Header = "Break in progress";
-                    _taskbarIcon.ToolTipText = "Break in progress";
-                }
-                else
-                {
-                    string timeFormatted = $"{_breakManager.TimeRemaining / 60:D2}:{_breakManager.TimeRemaining % 60:D2}";
-                    statusItem.Header = $"Next break in {timeFormatted}";
-                    _taskbarIcon.ToolTipText = $"Next break in {timeFormatted}";
+                    if (_breakManager.Status == BreakStatus.InBreak)
+                    {
+                        statusItem.Header = "Break in progress";
+                        _taskbarIcon.ToolTipText = "Break in progress";
+                    }
+                    else
+                    {
+                        string timeFormatted = $"{_breakManager.TimeRemaining / 60:D2}:{_breakManager.TimeRemaining % 60:D2}";
+                        statusItem.Header = $"Next break in {timeFormatted}";
+                        _taskbarIcon.ToolTipText = $"Next break in {timeFormatted}";
+                    }
+
+                    if (statusItem.Icon is Wpf.Ui.Controls.ProgressRing progressRing)
+                    {
+                        double progress = 1.0 - ((double)_breakManager.TimeRemaining / _breakManager.WorkInterval);
+                        progressRing.Progress = Math.Max(0.0, Math.Min(100.0, progress * 100));
+                    }
                 }
 
-                if (statusItem.Icon is Wpf.Ui.Controls.ProgressRing progressRing)
+                var startBreakButton = (System.Windows.Controls.Button)contextMenu.FindName("StartBreakButton");
+                if (startBreakButton != null)
                 {
-                    double progress = 1.0 - ((double)_breakManager.TimeRemaining / _breakManager.WorkInterval);
-                    progressRing.Progress = Math.Max(0.0, Math.Min(100.0, progress * 100));
-                }
-
-                var startBreakMenuItem = (System.Windows.Controls.MenuItem)contextMenu.FindName("StartBreakButton");
-                if (startBreakMenuItem != null)
-                {
-                    startBreakMenuItem.Header = _breakManager.IsSyncedSession ? "Start Intermission" : "Start Break Now";
+                    startBreakButton.Content = _breakManager.IsSyncedSession ? "Start Intermission" : "Start Break Now";
                 }
 
                 // Dynamically show/hide Leave Session and enable/disable settings
@@ -262,7 +265,14 @@ namespace PauselyWindows
         private void CopySessionCode_Click(object sender, RoutedEventArgs e)
         {
             string code = _breakManager.GenerateSessionCode();
-            System.Windows.Clipboard.SetText(code);
+            try
+            {
+                System.Windows.Clipboard.SetText(code);
+            }
+            catch (System.Runtime.InteropServices.COMException)
+            {
+                // Clipboard is locked by another process
+            }
         }
 
         private void JoinSession_Click(object sender, RoutedEventArgs e)
