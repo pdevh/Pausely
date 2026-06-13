@@ -133,39 +133,36 @@
                 <Grid.RenderTransform>
                     <TranslateTransform x:Name="TimerTranslate" Y="16" />
                 </Grid.RenderTransform>
+                
+                <!-- Soft directional drop shadow — lifts the glass off the background -->
+                <Grid.Effect>
+                    <DropShadowEffect Color="Black" Opacity="0.12" BlurRadius="14" ShadowDepth="6" Direction="270" />
+                </Grid.Effect>
 
-                <!-- Layer 1: Ambient glow / dark backing -->
-                <TextBlock Text="{Binding ElementName=TimerText, Path=Text}" Foreground="Black"
+                <!-- Layer 1: Specular highlight (BELOW body) — only top-left edge peeks out -->
+                <TextBlock Text="{Binding ElementName=TimerText, Path=Text}"
+                           Foreground="#45FFFFFF"
                            FontFamily="{StaticResource DisplayFont}" FontSize="120" FontWeight="Bold"
-                           HorizontalAlignment="Center" Opacity="0.3">
-                    <TextBlock.Effect>
-                        <BlurEffect Radius="24" />
-                    </TextBlock.Effect>
-                </TextBlock>
+                           HorizontalAlignment="Center" Margin="-0.7,-0.7,0.7,0.7" />
 
-                <!-- Layer 2: Main glass body -->
+                <!-- Layer 2: Inner shadow (BELOW body) — only bottom-right edge peeks out -->
+                <TextBlock Text="{Binding ElementName=TimerText, Path=Text}"
+                           Foreground="#20000000"
+                           FontFamily="{StaticResource DisplayFont}" FontSize="120" FontWeight="Bold"
+                           HorizontalAlignment="Center" Margin="0.7,0.7,-0.7,-0.7" />
+
+                <!-- Layer 3: Glass body — very faint vertical gradient (light from above) -->
                 <TextBlock x:Name="TimerText" Text="00:20"
                            FontFamily="{StaticResource DisplayFont}" FontSize="120" FontWeight="Bold"
                            HorizontalAlignment="Center">
                     <TextBlock.Foreground>
-                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                            <GradientStop Color="#CCFFFFFF" Offset="0" />
-                            <GradientStop Color="#33FFFFFF" Offset="1" />
+                        <LinearGradientBrush StartPoint="0.5,0" EndPoint="0.5,1">
+                            <GradientStop Color="#28FFFFFF" Offset="0.0" />
+                            <GradientStop Color="#10FFFFFF" Offset="0.5" />
+                            <GradientStop Color="#1AFFFFFF" Offset="1.0" />
                         </LinearGradientBrush>
                     </TextBlock.Foreground>
                 </TextBlock>
-
-                <!-- Layer 3: Glass bevel edge (top-left specular) -->
-                <TextBlock Text="{Binding ElementName=TimerText, Path=Text}"
-                           Foreground="#80FFFFFF"
-                           FontFamily="{StaticResource DisplayFont}" FontSize="120" FontWeight="Bold"
-                           HorizontalAlignment="Center" Margin="-1.5,-1.5,1.5,1.5" />
-
-                <!-- Layer 4: Inner shadow (bottom-right) -->
-                <TextBlock Text="{Binding ElementName=TimerText, Path=Text}"
-                           Foreground="#33000000"
-                           FontFamily="{StaticResource DisplayFont}" FontSize="120" FontWeight="Bold"
-                           HorizontalAlignment="Center" Margin="1.5,1.5,-1.5,-1.5" />
             </Grid>
 
             <!-- Controls panel (Phase 3) -->
