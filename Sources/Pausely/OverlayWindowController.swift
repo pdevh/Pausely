@@ -18,18 +18,34 @@ class OverlayWindowController {
     private var windows: [NSWindow] = []
     private var escapeMonitor: Any?
     private var lastEscapePressTime: Date?
+    private var presentationTask: Task<Void, Never>?
     
     func showOverlays(breakManager: BreakManager, isIntermission: Bool = false) {
-        closeOverlays()
+        closeOverlays(cancelWallpaperRefresh: false)
         
         let screens = NSScreen.screens
+        presentationTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            guard !Task.isCancelled else { return }
+
+            _ = await RenderedWallpaperProvider.shared.refreshAndWait(for: screens)
+            guard !Task.isCancelled else { return }
+
+            self.presentOverlays(on: screens, breakManager: breakManager, isIntermission: isIntermission)
+        }
+    }
+
+    @MainActor
+    private func presentOverlays(on screens: [NSScreen], breakManager: BreakManager, isIntermission: Bool) {
         for screen in screens {
-            let images = getWallpaperImages(screen: screen)
-            
+            guard let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else {
+                continue
+            }
+
             // Create custom fullscreen panel
             let panel = FullScreenOverlayPanel(
                 contentRect: screen.frame,
-                styleMask: [.borderless, .nonactivatingPanel],
+                styleMask: [.borderless],
                 backing: .buffered,
                 defer: false
             )
@@ -42,10 +58,9 @@ class OverlayWindowController {
             panel.ignoresMouseEvents = false // Intercept mouse to enforce break
             
             let overlayView = BreakOverlayView(
-                crispWallpaper: images?.crisp,
-                blurredWallpaper: images?.blurred,
                 breakManager: breakManager,
-                isIntermission: isIntermission
+                isIntermission: isIntermission,
+                displayID: displayID
             )
             
             panel.contentView = NSHostingView(rootView: overlayView)
@@ -56,15 +71,18 @@ class OverlayWindowController {
             panel.makeKeyAndOrderFront(nil)
             windows.append(panel)
         }
-        
+
         // Force activate app so windows can receive key focus
         NSApp.activate(ignoringOtherApps: true)
-        
+
         // Setup local keyboard monitor for Escape key
         setupEscapeKeyMonitor(breakManager: breakManager)
     }
     
-    func closeOverlays() {
+    func closeOverlays(cancelWallpaperRefresh: Bool = true) {
+        presentationTask?.cancel()
+        presentationTask = nil
+
         // Remove keyboard monitor
         if let monitor = escapeMonitor {
             NSEvent.removeMonitor(monitor)
@@ -76,6 +94,11 @@ class OverlayWindowController {
             window.orderOut(nil)
         }
         windows.removeAll()
+        if cancelWallpaperRefresh {
+            Task { @MainActor in
+                RenderedWallpaperProvider.shared.cancelRefresh()
+            }
+        }
     }
     
     private func setupEscapeKeyMonitor(breakManager: BreakManager) {
@@ -87,7 +110,7 @@ class OverlayWindowController {
                     // Double press Escape!
                     DispatchQueue.main.async {
                         if breakManager.isInIntermission {
-                            breakManager.endIntermission()
+                            breakManager.endIntermission(wasPremature: true)
                         } else {
                             breakManager.skipBreak()
                         }
@@ -101,45 +124,5 @@ class OverlayWindowController {
             return event
         }
     }
-    
-    private func getWallpaperImages(screen: NSScreen) -> (crisp: NSImage, blurred: NSImage)? {
-        guard let url = NSWorkspace.shared.desktopImageURL(for: screen),
-              let crispImage = DynamicWallpaperResolver.resolveCurrentImage(for: url) else {
-            return nil
-        }
-        
-        // For the thumbnail, use the crisp image's CGImage representation directly
-        // to avoid re-resolving the dynamic wallpaper index.
-        guard let cgRepr = crispImage.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
-            return (crisp: crispImage, blurred: crispImage)
-        }
-        
-        // Create a tiny thumbnail from the resolved image for the blur layer
-        let maxDimension = max(cgRepr.width, cgRepr.height)
-        let scale = min(1.0, 300.0 / Double(maxDimension))
-        let thumbWidth = Int(Double(cgRepr.width) * scale)
-        let thumbHeight = Int(Double(cgRepr.height) * scale)
-        
-        guard let colorSpace = cgRepr.colorSpace,
-              let context = CGContext(data: nil,
-                                      width: thumbWidth,
-                                      height: thumbHeight,
-                                      bitsPerComponent: 8,
-                                      bytesPerRow: 0,
-                                      space: colorSpace,
-                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
-            return (crisp: crispImage, blurred: crispImage)
-        }
-        
-        context.interpolationQuality = .low
-        context.draw(cgRepr, in: CGRect(x: 0, y: 0, width: thumbWidth, height: thumbHeight))
-        
-        guard let cgThumbnail = context.makeImage() else {
-            return (crisp: crispImage, blurred: crispImage)
-        }
-        
-        let blurredImage = NSImage(cgImage: cgThumbnail, size: NSSize(width: cgThumbnail.width, height: cgThumbnail.height))
-        
-        return (crisp: crispImage, blurred: blurredImage)
-    }
+
 }

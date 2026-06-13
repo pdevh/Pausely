@@ -86,7 +86,7 @@ namespace PauselyWindows
         public event EventHandler? BreakEnding;
         public event EventHandler<BreakEndedEventArgs>? BreakEnded;
         public event EventHandler? IntermissionTriggered;
-        public event EventHandler? IntermissionEnded;
+        public event EventHandler<BreakEndedEventArgs>? IntermissionEnded;
 
         private const double REVERSE_ANIMATION_DURATION_SECONDS = 1.15;
         private const double TEST_MODE_THRESHOLD = 15;
@@ -231,7 +231,7 @@ namespace PauselyWindows
             BreakTriggered?.Invoke(this, EventArgs.Empty);
         }
 
-        public void EndBreak()
+        public void EndBreak(bool wasPremature = false)
         {
             if (_isEnding) return;
             Logger.Info("Ending break.");
@@ -251,7 +251,7 @@ namespace PauselyWindows
                 }
                 SnoozesLeft = 4;
                 OnPropertyChanged();
-                BreakEnded?.Invoke(this, new BreakEndedEventArgs(isSnoozed: false, playSound: true));
+                BreakEnded?.Invoke(this, new BreakEndedEventArgs(isSnoozed: false, playSound: !wasPremature));
             };
             endTimer.Start();
         }
@@ -299,7 +299,7 @@ namespace PauselyWindows
                 int currentCycleIndex = (int)(elapsed / cycleDuration);
                 _skippedCycleIndices.Add(currentCycleIndex);
             }
-            EndBreak();
+            EndBreak(wasPremature: true);
         }
 
         public void StartIntermission()
@@ -312,7 +312,7 @@ namespace PauselyWindows
             IntermissionTriggered?.Invoke(this, EventArgs.Empty);
         }
 
-        public void EndIntermission()
+        public void EndIntermission(bool wasPremature = false)
         {
             Logger.Info("Ending intermission.");
             IsInIntermission = false;
@@ -325,7 +325,7 @@ namespace PauselyWindows
             {
                 endTimer.Stop();
                 OnPropertyChanged();
-                IntermissionEnded?.Invoke(this, EventArgs.Empty);
+                IntermissionEnded?.Invoke(this, new BreakEndedEventArgs(isSnoozed: false, playSound: !wasPremature));
             };
             endTimer.Start();
         }
@@ -541,7 +541,7 @@ namespace PauselyWindows
                         IsInIntermission = false;
                         IntermissionTimeRemaining = 0;
                         OnPropertyChanged();
-                        IntermissionEnded?.Invoke(this, EventArgs.Empty);
+                        IntermissionEnded?.Invoke(this, new BreakEndedEventArgs(isSnoozed: false, playSound: false));
                     }
                 }
                 else if (e.Reason == SessionSwitchReason.SessionUnlock)

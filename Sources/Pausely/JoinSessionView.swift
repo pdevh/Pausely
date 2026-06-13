@@ -7,6 +7,9 @@ struct JoinSessionView: View {
     
     var onJoin: ((String) -> Void)?
     var onCancel: (() -> Void)?
+    @State private var isVisible = false
+    @State private var isHoveringCancel = false
+    @State private var isHoveringJoin = false
     
     var body: some View {
         VStack(spacing: 24) {
@@ -55,14 +58,24 @@ struct JoinSessionView: View {
                     Text("Cancel")
                         .font(.system(size: 14, weight: .medium))
                         .frame(width: 100, height: 36)
-                        .background(Color(NSColor.controlBackgroundColor))
+                        .background(isHoveringCancel ? Color.gray.opacity(0.1) : Color(NSColor.controlBackgroundColor))
                         .cornerRadius(8)
                         .overlay(
                             RoundedRectangle(cornerRadius: 8)
                                 .stroke(Color.gray.opacity(0.2), lineWidth: 1)
                         )
+                        .scaleEffect(isHoveringCancel ? 1.02 : 1.0)
+                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isHoveringCancel)
                 }
                 .buttonStyle(PlainButtonStyle())
+                .onHover { hovering in
+                    isHoveringCancel = hovering
+                    if hovering {
+                        NSCursor.pointingHand.push()
+                    } else {
+                        NSCursor.pop()
+                    }
+                }
                 
                 Button(action: {
                     if code.count == 6 {
@@ -73,18 +86,36 @@ struct JoinSessionView: View {
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.white)
                         .frame(width: 100, height: 36)
-                        .background(code.count == 6 ? Color.accentColor : Color.gray.opacity(0.5))
+                        .background(
+                            code.count == 6 
+                                ? (isHoveringJoin ? Color.accentColor.opacity(0.8) : Color.accentColor) 
+                                : Color.gray.opacity(0.5)
+                        )
                         .cornerRadius(8)
+                        .scaleEffect(isHoveringJoin && code.count == 6 ? 1.02 : 1.0)
+                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isHoveringJoin)
                 }
                 .buttonStyle(PlainButtonStyle())
                 .disabled(code.count != 6)
                 .animation(.easeInOut, value: code.count == 6)
+                .onHover { hovering in
+                    isHoveringJoin = hovering
+                    if hovering && code.count == 6 {
+                        NSCursor.pointingHand.push()
+                    } else {
+                        NSCursor.pop()
+                    }
+                }
             }
         }
         .padding(32)
         .frame(width: 420)
         .background(VisualEffectView(material: .popover, blendingMode: .behindWindow).ignoresSafeArea())
+        .opacity(isVisible ? 1 : 0)
+        .scaleEffect(isVisible ? 1 : 0.95)
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isVisible)
         .onAppear {
+            isVisible = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 isFocused = true
             }
@@ -102,6 +133,8 @@ struct OTPBox: View {
     let character: String
     let isActive: Bool
     
+    @State private var isPopping = false
+    
     var body: some View {
         Text(character)
             .font(.system(size: 32, weight: .bold, design: .monospaced))
@@ -117,6 +150,17 @@ struct OTPBox: View {
                     .shadow(color: isActive ? Color.accentColor.opacity(0.4) : .clear, radius: 4, x: 0, y: 0)
             )
             .animation(.easeInOut(duration: 0.15), value: isActive)
+            .scaleEffect(isPopping ? 1.15 : 1.0)
+            .onChange(of: character) { newValue in
+                if !newValue.isEmpty {
+                    isPopping = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                            isPopping = false
+                        }
+                    }
+                }
+            }
     }
 }
 

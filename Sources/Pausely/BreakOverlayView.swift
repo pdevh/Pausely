@@ -1,7 +1,83 @@
 import SwiftUI
 import CoreGraphics
+import CoreText
 import AppKit
 import Foundation
+
+// MARK: - Visual Effect Background
+
+struct VisualEffectBackground: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.blendingMode = .behindWindow
+        view.material = .fullScreenUI
+        view.state = .active
+        return view
+    }
+    
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
+}
+
+// MARK: - TextShape (CoreText → SwiftUI Shape)
+
+/// Converts a string rendered in a given `NSFont` into a SwiftUI `Shape`
+/// by extracting each glyph's `CGPath` via CoreText and assembling them
+/// into a single path, centered in the proposed rect with a Y-axis flip
+/// for SwiftUI's top-left-origin coordinate space.
+struct TextShape: Shape, @unchecked Sendable {
+    let text: String
+    let font: NSFont
+
+    func path(in rect: CGRect) -> Path {
+        let ctFont = font as CTFont
+        let attrString = NSAttributedString(
+            string: text,
+            attributes: [.font: font]
+        )
+        let line = CTLineCreateWithAttributedString(attrString)
+        let runs = CTLineGetGlyphRuns(line) as! [CTRun]
+
+        let combinedPath = CGMutablePath()
+
+        for run in runs {
+            let glyphCount = CTRunGetGlyphCount(run)
+            var glyphs = [CGGlyph](repeating: 0, count: glyphCount)
+            var positions = [CGPoint](repeating: .zero, count: glyphCount)
+            CTRunGetGlyphs(run, CFRangeMake(0, glyphCount), &glyphs)
+            CTRunGetPositions(run, CFRangeMake(0, glyphCount), &positions)
+
+            for i in 0..<glyphCount {
+                guard let glyphPath = CTFontCreatePathForGlyph(ctFont, glyphs[i], nil) else {
+                    continue
+                }
+                let transform = CGAffineTransform(translationX: positions[i].x, y: positions[i].y)
+                combinedPath.addPath(glyphPath, transform: transform)
+            }
+        }
+
+        // Get typographic bounds
+        var ascent: CGFloat = 0
+        var descent: CGFloat = 0
+        var leading: CGFloat = 0
+        let advanceWidth = CTLineGetTypographicBounds(line, &ascent, &descent, &leading)
+
+        // Verify we have a path to draw
+        let glyphBounds = combinedPath.boundingBox
+        guard !glyphBounds.isEmpty else { return Path() }
+
+        // Center the typographic cell in the proposed rect and flip Y for SwiftUI
+        let scaleX: CGFloat = 1
+        let scaleY: CGFloat = -1
+        let offsetX = rect.midX - CGFloat(advanceWidth) / 2
+        let offsetY = (text == ":") ? (rect.midY + glyphBounds.midY) : (rect.midY + (ascent - descent) / 2)
+
+        var finalTransform = CGAffineTransform(scaleX: scaleX, y: scaleY)
+            .concatenating(CGAffineTransform(translationX: offsetX, y: offsetY))
+
+        let finalPath = combinedPath.copy(using: &finalTransform) ?? combinedPath
+        return Path(finalPath)
+    }
+}
 
 // Dynamically load the private macOS screen lock function at runtime to prevent compile-time link errors.
 func lockScreen() {
@@ -82,16 +158,173 @@ struct GlassButtonStyle: ButtonStyle {
 // MARK: - Isolated Timer Component
 // Timer ticks only re-render this child, never the parent overlay.
 
+// MARK: Native Liquid Glass (macOS 26+)
+
+/// On macOS 26+, renders each character of the time string with the native
+/// `.glassEffect(.clear, in: TextShape(...))` modifier for an authentic
+/// liquid glass look. Characters are laid out in an HStack with fixed-width
+/// frames for stable monospaced alignment, and digit changes animate with
+/// a top-push transition.
+@available(macOS 26, *)
+struct NativeGlassTimerText: View {
+    let text: String
+
+    private let fontSize: CGFloat = 84
+
+    /// System rounded bold font configured with **tabular (monospaced) digits**
+    /// so that every digit `0`–`9` occupies the same typographic width,
+    /// while the colon `:` keeps its natural narrow width.
+    private var nsFont: NSFont {
+        let systemFont = NSFont.systemFont(ofSize: fontSize, weight: .bold)
+        guard let roundedDesc = systemFont.fontDescriptor.withDesign(.rounded) else {
+            return systemFont
+        }
+        // Add tabular-figures CoreText feature
+        let tabularFeature: [NSFontDescriptor.FeatureKey: Any] = [
+            .typeIdentifier: kNumberSpacingType,
+            .selectorIdentifier: kMonospacedNumbersSelector
+        ]
+        let tabularDesc = roundedDesc.addingAttributes([
+            .featureSettings: [tabularFeature]
+        ])
+        return NSFont(descriptor: tabularDesc, size: fontSize) ?? systemFont
+    }
+
+    /// Measures the native typographic width of a single character in `nsFont`.
+    /// Because the font uses tabular figures, all digits return the same width;
+    /// the colon naturally returns a narrower value.
+    private func charWidth(_ char: String) -> CGFloat {
+        let attrStr = NSAttributedString(
+            string: char,
+            attributes: [.font: nsFont]
+        )
+        return ceil(attrStr.size().width)
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(text.enumerated()), id: \.offset) { index, char in
+                let charStr = String(char)
+                let width = charWidth(charStr)
+                let height = fontSize * 1.3
+
+                ZStack {
+                    TextShape(text: charStr, font: nsFont)
+                        .glassEffect(.clear, in: TextShape(text: charStr, font: nsFont))
+                        .id("\(index)-\(charStr)")
+                        .transition(.push(from: .bottom))
+                }
+                .frame(width: width, height: height)
+                .mask {
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0.0),
+                            .init(color: .white, location: 0.15),
+                            .init(color: .white, location: 0.85),
+                            .init(color: .clear, location: 1.0)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                }
+            }
+        }
+        .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 6)
+    }
+}
+
+// MARK: Fallback Faked Glass (macOS 13+)
+
+/// Pre-macOS 26 implementation that fakes the glass look using layered
+/// materials, specular highlights, inner shadows, and blend modes.
+struct FallbackGlassTimerText: View {
+    let text: String
+
+    var body: some View {
+        let fontSize: CGFloat = 84
+        let font: Font = .system(size: fontSize, weight: .bold, design: .rounded)
+
+        ZStack {
+            // ── Layer 1: Glass body ──────────────────────────────────────
+            // Ultra-thin material masked to the text shape at low opacity.
+            // This gives the subtle "refraction" blur through the text
+            // without making it look like solid frosted plastic.
+            Text(text).font(font).monospacedDigit()
+                .foregroundColor(.clear)
+                .background(.ultraThinMaterial)
+                .mask(Text(text).font(font).monospacedDigit())
+                .opacity(0.35)
+
+            // ── Layer 2: Specular highlight (top-left edge) ─────────────
+            // Draw white text, then cut out a copy shifted down-right.
+            // Only the top-left edge pixels survive — the "light catching
+            // the bevel" effect seen on the iOS lock screen.
+            Text(text).font(font).monospacedDigit()
+                .foregroundColor(.clear)
+                .overlay(
+                    ZStack {
+                        Text(text).font(font).monospacedDigit()
+                            .foregroundColor(.white.opacity(0.8))
+                        Text(text).font(font).monospacedDigit()
+                            .foregroundColor(.black)
+                            .offset(x: 1.5, y: 1.5)
+                            .blendMode(.destinationOut)
+                    }
+                    .compositingGroup()
+                )
+                .mask(Text(text).font(font).monospacedDigit())
+
+            // ── Layer 3: Inner shadow (bottom-right edge) ───────────────
+            // Same technique, opposite direction — dark edge on the
+            // bottom-right to create depth and the 3D embossed look.
+            Text(text).font(font).monospacedDigit()
+                .foregroundColor(.clear)
+                .overlay(
+                    ZStack {
+                        Text(text).font(font).monospacedDigit()
+                            .foregroundColor(.black.opacity(0.3))
+                        Text(text).font(font).monospacedDigit()
+                            .foregroundColor(.black)
+                            .offset(x: -1.5, y: -1.5)
+                            .blendMode(.destinationOut)
+                    }
+                    .compositingGroup()
+                )
+                .mask(Text(text).font(font).monospacedDigit())
+
+            // ── Layer 4: Subtle luminosity fill ─────────────────────────
+            // A barely-visible white fill so the text shape isn't
+            // completely invisible on very dark backgrounds.
+            Text(text).font(font).monospacedDigit()
+                .foregroundColor(.white.opacity(0.08))
+        }
+        .compositingGroup()
+        .contentTransition(.numericText(countsDown: true))
+        // Soft drop shadow to lift the glass from the background
+        .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 6)
+    }
+}
+
+// MARK: Public entry point — dispatches based on OS version
+
+struct GlassTimerText: View {
+    let text: String
+
+    var body: some View {
+        if #available(macOS 26, *) {
+            NativeGlassTimerText(text: text)
+        } else {
+            FallbackGlassTimerText(text: text)
+        }
+    }
+}
+
 struct TimerCountdownView: View {
     @ObservedObject var breakManager: BreakManager
     
     var body: some View {
-        Text(timeFormatted(breakManager.timeRemaining))
-            .font(.system(size: 84, weight: .bold, design: .rounded))
-            .monospacedDigit()
-            .foregroundColor(Color(red: 0.72, green: 0.88, blue: 1.0))
-            .contentTransition(.numericText(countsDown: true))
-            .animation(.easeOut(duration: 0.4), value: breakManager.timeRemaining)
+        GlassTimerText(text: timeFormatted(breakManager.timeRemaining))
+            .animation(.spring(duration: 0.4, bounce: 0.15, blendDuration: 0.08), value: breakManager.timeRemaining)
     }
     
     private func timeFormatted(_ totalSeconds: Int) -> String {
@@ -105,12 +338,8 @@ struct IntermissionTimerView: View {
     @ObservedObject var breakManager: BreakManager
     
     var body: some View {
-        Text(timeFormatted(breakManager.intermissionTimeRemaining))
-            .font(.system(size: 84, weight: .bold, design: .rounded))
-            .monospacedDigit()
-            .foregroundColor(Color(red: 0.72, green: 0.88, blue: 1.0))
-            .contentTransition(.numericText(countsDown: true))
-            .animation(.easeOut(duration: 0.4), value: breakManager.intermissionTimeRemaining)
+        GlassTimerText(text: timeFormatted(breakManager.intermissionTimeRemaining))
+            .animation(.spring(duration: 0.4, bounce: 0.15, blendDuration: 0.08), value: breakManager.intermissionTimeRemaining)
     }
     
     private func timeFormatted(_ totalSeconds: Int) -> String {
@@ -183,7 +412,7 @@ struct IntermissionControlsView: View {
     var body: some View {
         VStack(spacing: 20) {
             Button(action: {
-                breakManager.endIntermission()
+                breakManager.endIntermission(wasPremature: true)
             }) {
                 HStack(spacing: 6) {
                     Image(systemName: "xmark")
@@ -207,17 +436,17 @@ struct IntermissionControlsView: View {
 // MARK: - Main Break Overlay View
 
 struct BreakOverlayView: View {
-    var crispWallpaper: NSImage?
-    var blurredWallpaper: NSImage?
     
     // NOT @ObservedObject — timer ticks must not re-render this view.
     let breakManager: BreakManager
     var isIntermission: Bool = false
+    let displayID: CGDirectDisplayID
+    @ObservedObject private var wallpaperProvider = RenderedWallpaperProvider.shared
     
     // --- Animation state ---
     // Phase 0: Background wallpaper transition
     @State private var wallpaperOpacity: Double = 0
-    @State private var wallpaperBlur: CGFloat = 0
+    @State private var wallpaperBlurOpacity: Double = 0
     
     // Phase 1: Main text (title)
     @State private var mainTextBlur: CGFloat = AnimConst.textStrongBlur
@@ -248,15 +477,20 @@ struct BreakOverlayView: View {
             
             ZStack {
                 // ──────────────────────────────────────────────
-                // Layer 1: Background wallpaper
+                // Layer 1: Captured rendered wallpaper
                 // ──────────────────────────────────────────────
-                if let crisp = crispWallpaper {
-                    Image(nsImage: crisp)
+                if let wallpaper = wallpaperProvider.snapshot(for: displayID) {
+                    Image(nsImage: wallpaper.crisp)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
-                        .blur(radius: wallpaperBlur)
-                        .scaleEffect(1.05) // Prevent blur edge artifacts
                         .opacity(wallpaperOpacity)
+                        .edgesIgnoringSafeArea(.all)
+
+                    Image(nsImage: wallpaper.blurred)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .scaleEffect(1.05)
+                        .opacity(wallpaperBlurOpacity)
                         .edgesIgnoringSafeArea(.all)
                 } else {
                     Color.black
@@ -356,7 +590,7 @@ struct BreakOverlayView: View {
         // Phase 0: Background transition (frame 0–53, 1.06s)
         withAnimation(easeOut) {
             wallpaperOpacity = 1.0
-            wallpaperBlur = AnimConst.backgroundStrongBlur
+            wallpaperBlurOpacity = 1.0
         }
         
         // Phase 1: Main text intro (frame 55–90, 0.70s)
@@ -406,7 +640,7 @@ struct BreakOverlayView: View {
         // 1. Background wallpaper reverse (1.06s) — this is the longest
         withAnimation(.easeOut(duration: AnimConst.phase0Duration)) {
             wallpaperOpacity = 0
-            wallpaperBlur = 0
+            wallpaperBlurOpacity = 0
         }
         
         // 2. Main text reverse (0.70s)

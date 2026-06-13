@@ -229,11 +229,14 @@ namespace PauselyWindows
             });
         }
 
-        private void BreakManager_IntermissionEnded(object sender, EventArgs e)
+        private void BreakManager_IntermissionEnded(object sender, BreakEndedEventArgs e)
         {
             Dispatcher.Invoke(() =>
             {
-                SoundManager.PlayEndSound();
+                if (e.PlaySound)
+                {
+                    SoundManager.PlayEndSound();
+                }
 
                 foreach (var window in _overlayWindows)
                 {

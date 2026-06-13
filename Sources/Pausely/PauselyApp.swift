@@ -4,6 +4,8 @@ import AppKit
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         MenuManager.shared.setupMenuBar()
+
+        RenderedWallpaperProvider.shared.requestScreenCapturePermissionIfNeeded()
         
         // Startup reconciliation
         StartupService.shared.reconcile()
@@ -163,7 +165,7 @@ class MenuManager: NSObject, NSMenuDelegate {
     private var statusItem: NSStatusItem?
     private let breakManager = BreakManager.shared
     private var statusMenuItemView: StatusMenuItemView?
-    private var joinSessionWindow: NSWindow?
+    private var sessionDialogWindow: NSWindow?
     
     func setupMenuBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -233,21 +235,27 @@ class MenuManager: NSObject, NSMenuDelegate {
         menu.addItem(NSMenuItem.separator())
         
         // Collaborative Studying
-        let copyCodeItem = NSMenuItem(title: "Copy Session Code", action: #selector(copySessionCodeClicked), keyEquivalent: "")
-        copyCodeItem.target = self
-        copyCodeItem.image = NSImage(systemSymbolName: "doc.on.doc", accessibilityDescription: nil)
-        menu.addItem(copyCodeItem)
-        
-        let joinSessionItem = NSMenuItem(title: "Join Session...", action: #selector(joinSessionClicked), keyEquivalent: "")
-        joinSessionItem.target = self
-        joinSessionItem.image = NSImage(systemSymbolName: "link.badge.plus", accessibilityDescription: nil)
-        menu.addItem(joinSessionItem)
-        
         if breakManager.isSyncedSession {
+            let copyCodeItem = NSMenuItem(title: "Copy Invite Code", action: #selector(copySessionCodeClicked), keyEquivalent: "")
+            copyCodeItem.target = self
+            copyCodeItem.image = NSImage(systemSymbolName: "doc.on.doc", accessibilityDescription: nil)
+            menu.addItem(copyCodeItem)
+            
             let leaveSessionItem = NSMenuItem(title: "Leave Session", action: #selector(leaveSessionClicked), keyEquivalent: "")
             leaveSessionItem.target = self
             leaveSessionItem.image = NSImage(systemSymbolName: "person.fill.xmark", accessibilityDescription: nil)
             menu.addItem(leaveSessionItem)
+        } else {
+            let hostSessionItem = NSMenuItem(title: "Host Session", action: #selector(hostSessionClicked), keyEquivalent: "")
+            hostSessionItem.target = self
+            hostSessionItem.image = NSImage(systemSymbolName: "person.2.badge.gearshape", accessibilityDescription: nil)
+            hostSessionItem.toolTip = "Starts a session using your current Work Interval and Break Duration."
+            menu.addItem(hostSessionItem)
+            
+            let joinSessionItem = NSMenuItem(title: "Join Session...", action: #selector(joinSessionClicked), keyEquivalent: "")
+            joinSessionItem.target = self
+            joinSessionItem.image = NSImage(systemSymbolName: "link.badge.plus", accessibilityDescription: nil)
+            menu.addItem(joinSessionItem)
         }
         
         menu.addItem(NSMenuItem.separator())
@@ -337,22 +345,61 @@ class MenuManager: NSObject, NSMenuDelegate {
         pasteboard.setString(code, forType: .string)
     }
     
+    @objc private func hostSessionClicked() {
+        let code = breakManager.generateSessionCode()
+        
+        DispatchQueue.main.async {
+            if let existingWindow = self.sessionDialogWindow {
+                existingWindow.close()
+            }
+            
+            let view = HostSessionView(
+                code: code,
+                onDone: { [weak self] in
+                    self?.sessionDialogWindow?.close()
+                    self?.sessionDialogWindow = nil
+                }
+            )
+            
+            let hostingController = NSHostingController(rootView: view)
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 420, height: 260),
+                styleMask: [.titled, .fullSizeContentView],
+                backing: .buffered,
+                defer: false
+            )
+            window.titlebarAppearsTransparent = true
+            window.titleVisibility = .hidden
+            window.isOpaque = false
+            window.backgroundColor = .clear
+            window.contentViewController = hostingController
+            window.isReleasedWhenClosed = false
+            window.isMovableByWindowBackground = true
+            
+            self.sessionDialogWindow = window
+            
+            NSApp.activate(ignoringOtherApps: true)
+            self.centerWindow(window)
+            window.makeKeyAndOrderFront(nil)
+        }
+    }
+    
     @objc private func joinSessionClicked() {
         // Run on main thread but delay slightly if menu is closing
         DispatchQueue.main.async {
-            if let existingWindow = self.joinSessionWindow {
+            if let existingWindow = self.sessionDialogWindow {
                 existingWindow.close()
             }
             
             let view = JoinSessionView(
                 onJoin: { [weak self] code in
                     self?.breakManager.joinSession(code: code)
-                    self?.joinSessionWindow?.close()
-                    self?.joinSessionWindow = nil
+                    self?.sessionDialogWindow?.close()
+                    self?.sessionDialogWindow = nil
                 },
                 onCancel: { [weak self] in
-                    self?.joinSessionWindow?.close()
-                    self?.joinSessionWindow = nil
+                    self?.sessionDialogWindow?.close()
+                    self?.sessionDialogWindow = nil
                 }
             )
             
@@ -368,18 +415,31 @@ class MenuManager: NSObject, NSMenuDelegate {
             window.isOpaque = false
             window.backgroundColor = .clear
             window.contentViewController = hostingController
-            window.center()
             window.isReleasedWhenClosed = false
+            window.isMovableByWindowBackground = true
             
-            self.joinSessionWindow = window
+            self.sessionDialogWindow = window
             
             NSApp.activate(ignoringOtherApps: true)
+            self.centerWindow(window)
             window.makeKeyAndOrderFront(nil)
         }
     }
     
     @objc private func leaveSessionClicked() {
         breakManager.leaveSession()
+    }
+    
+    private func centerWindow(_ window: NSWindow) {
+        if let screen = NSScreen.main ?? NSScreen.screens.first {
+            let screenRect = screen.visibleFrame
+            let windowRect = window.frame
+            let newOrigin = NSPoint(
+                x: screenRect.minX + (screenRect.width - windowRect.width) / 2,
+                y: screenRect.minY + (screenRect.height - windowRect.height) / 2
+            )
+            window.setFrameOrigin(newOrigin)
+        }
     }
     
     @objc private func workIntervalSelected(_ sender: NSMenuItem) {

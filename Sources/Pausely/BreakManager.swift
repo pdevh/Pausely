@@ -22,6 +22,7 @@ class BreakManager: ObservableObject {
     private var isApplyingSync = false
     private var snoozeEndTime: Date? = nil
     private var lastBreakDisplayedTime: Date = Date()
+    private var preBreakActiveApp: NSRunningApplication?
     
     private var previousWorkInterval: TimeInterval = 1200
     private var previousBreakDuration: TimeInterval = 20
@@ -211,6 +212,10 @@ class BreakManager: ObservableObject {
             timeRemaining = Int(breakDuration)
         }
         
+        // Hide other apps so the moving wallpaper is visible
+        preBreakActiveApp = NSWorkspace.shared.frontmostApplication
+        AppVisibilityManager.shared.hideOtherApps()
+        
         // Show fullscreen overlay panels across all displays
         overlayController.showOverlays(breakManager: self)
         
@@ -218,15 +223,15 @@ class BreakManager: ObservableObject {
         SoundManager.playStartSound()
     }
     
-    func endBreak() {
+    func endBreak(wasPremature: Bool = false) {
         guard !isEnding else { return }
         isEnding = true
         
         // Post notification so the overlay can play reverse animations
         NotificationCenter.default.post(name: .breakWillEnd, object: nil)
         
-        // Wait for the longest reverse animation (background = 1.06s) + small buffer
-        let reverseAnimationDuration = 1.15
+        // Wait for the longest reverse animation (background = 0.50s) + small buffer
+        let reverseAnimationDuration = 0.55
         DispatchQueue.main.asyncAfter(deadline: .now() + reverseAnimationDuration) { [weak self] in
             guard let self = self else { return }
             self.isEnding = false
@@ -240,8 +245,17 @@ class BreakManager: ObservableObject {
             // Close overlays
             self.overlayController.closeOverlays()
             
+            // Restore hidden apps
+            AppVisibilityManager.shared.restoreApps()
+            
+            // Restore previously active app
+            self.preBreakActiveApp?.activate(options: .activateIgnoringOtherApps)
+            self.preBreakActiveApp = nil
+            
             // Play clean finish sound
-            SoundManager.playEndSound()
+            if !wasPremature {
+                SoundManager.playEndSound()
+            }
         }
     }
     
@@ -253,7 +267,7 @@ class BreakManager: ObservableObject {
         // Post notification so the overlay can play reverse animations
         NotificationCenter.default.post(name: .breakWillEnd, object: nil)
         
-        let reverseAnimationDuration = 1.15
+        let reverseAnimationDuration = 0.55
         DispatchQueue.main.asyncAfter(deadline: .now() + reverseAnimationDuration) { [weak self] in
             guard let self = self else { return }
             self.isEnding = false
@@ -269,6 +283,14 @@ class BreakManager: ObservableObject {
             
             // Close overlays
             self.overlayController.closeOverlays()
+            
+            // Restore hidden apps
+            AppVisibilityManager.shared.restoreApps()
+            
+            // Restore previously active app
+            self.preBreakActiveApp?.activate(options: .activateIgnoringOtherApps)
+            self.preBreakActiveApp = nil
+            
             // No sound when snoozing — silence is intentional
         }
     }
@@ -280,7 +302,7 @@ class BreakManager: ObservableObject {
             let currentCycleIndex = Int(elapsed / cycleDuration)
             skippedCycleIndices.insert(currentCycleIndex)
         }
-        endBreak()
+        endBreak(wasPremature: true)
     }
 
     func startIntermission() {
@@ -288,23 +310,32 @@ class BreakManager: ObservableObject {
         isInIntermission = true
         intermissionTimeRemaining = Int(breakDuration)
         
+        // Hide other apps so the moving wallpaper is visible
+        preBreakActiveApp = NSWorkspace.shared.frontmostApplication
+        AppVisibilityManager.shared.hideOtherApps()
+        
         // Show fullscreen overlay panels across all displays
         overlayController.showOverlays(breakManager: self, isIntermission: true)
         
         SoundManager.playStartSound()
     }
     
-    func endIntermission() {
+    func endIntermission(wasPremature: Bool = false) {
         isInIntermission = false
         intermissionTimeRemaining = 0
         
         // Post notification so the overlay can play reverse animations
         NotificationCenter.default.post(name: .breakWillEnd, object: nil)
         
-        let reverseAnimationDuration = 1.15
+        let reverseAnimationDuration = 0.55
         DispatchQueue.main.asyncAfter(deadline: .now() + reverseAnimationDuration) { [weak self] in
             self?.overlayController.closeOverlays()
-            SoundManager.playEndSound()
+            AppVisibilityManager.shared.restoreApps()
+            self?.preBreakActiveApp?.activate(options: .activateIgnoringOtherApps)
+            self?.preBreakActiveApp = nil
+            if !wasPremature {
+                SoundManager.playEndSound()
+            }
         }
     }
     

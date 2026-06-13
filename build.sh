@@ -7,9 +7,15 @@ VERSION=${1:-"1.0.0"}
 
 echo "=== Building Pausely MVP v$VERSION ==="
 
-# 1. Clean previous builds
-echo "Cleaning old build files..."
-rm -rf .build Pausely.app
+# 1. Clean previous build artifact
+echo "Cleaning Pausely.app..."
+rm -rf Pausely.app
+
+# Optional clean of swift build cache
+if [[ "$1" == "clean" || "$2" == "clean" ]]; then
+    echo "Cleaning build cache (.build)..."
+    rm -rf .build
+fi
 
 # 2. Update Info.plist version
 echo "Setting version to $VERSION in Info.plist..."

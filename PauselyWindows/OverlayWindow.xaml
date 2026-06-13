@@ -24,9 +24,40 @@
                            FontFamily="Segoe UI Variable Display" FontSize="48" FontWeight="SemiLight" 
                            HorizontalAlignment="Center" Margin="0,0,0,20"/>
                 
-                <TextBlock x:Name="TimerText" Text="20" Foreground="{DynamicResource TextFillColorPrimaryBrush}" 
-                           FontFamily="Segoe UI Variable Display" FontSize="120" FontWeight="Bold" 
-                           HorizontalAlignment="Center" Margin="0,0,0,40"/>
+                <Grid Margin="0,0,0,40" HorizontalAlignment="Center">
+                    <!-- Layer 1: Ambient Glow / Dark Backing -->
+                    <TextBlock Text="{Binding ElementName=TimerText, Path=Text}" Foreground="Black"
+                               FontFamily="Segoe UI Variable Display" FontSize="120" FontWeight="Bold" 
+                               HorizontalAlignment="Center" Opacity="0.3">
+                        <TextBlock.Effect>
+                            <BlurEffect Radius="24" />
+                        </TextBlock.Effect>
+                    </TextBlock>
+
+                    <!-- Layer 2: Main Glass Body -->
+                    <TextBlock x:Name="TimerText" Text="20" 
+                               FontFamily="Segoe UI Variable Display" FontSize="120" FontWeight="Bold" 
+                               HorizontalAlignment="Center">
+                        <TextBlock.Foreground>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                <GradientStop Color="#CCFFFFFF" Offset="0"/>
+                                <GradientStop Color="#33FFFFFF" Offset="1"/>
+                            </LinearGradientBrush>
+                        </TextBlock.Foreground>
+                    </TextBlock>
+
+                    <!-- Layer 3: Glass Bevel Edge -->
+                    <TextBlock Text="{Binding ElementName=TimerText, Path=Text}" 
+                               Foreground="#80FFFFFF"
+                               FontFamily="Segoe UI Variable Display" FontSize="120" FontWeight="Bold" 
+                               HorizontalAlignment="Center" Margin="-2,-2,2,2" />
+                               
+                    <!-- Layer 4: Inner Shadow Fake -->
+                    <TextBlock Text="{Binding ElementName=TimerText, Path=Text}" 
+                               Foreground="#33000000"
+                               FontFamily="Segoe UI Variable Display" FontSize="120" FontWeight="Bold" 
+                               HorizontalAlignment="Center" Margin="2,2,-2,-2" />
+                </Grid>
                 
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                     <ui:Button x:Name="SnoozeButton" Content="Snooze" Width="150" Height="40" 

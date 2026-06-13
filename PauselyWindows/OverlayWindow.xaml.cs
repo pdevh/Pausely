@@ -119,7 +119,7 @@ namespace PauselyWindows
 
         private void EndEarly_Click(object sender, RoutedEventArgs e)
         {
-            _breakManager.EndIntermission();
+            _breakManager.EndIntermission(wasPremature: true);
         }
 
         private void LockScreen_Click(object sender, RoutedEventArgs e)

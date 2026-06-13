@@ -12,6 +12,7 @@ Pausely.app/
 
 # Icon must end with two \r
 Icon
+test_*.swift
 
 
 # Thumbnails
