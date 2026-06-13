@@ -63,10 +63,10 @@ namespace PauselyWindows
 
             // Set initial toggle states
             var contextMenu = _taskbarIcon.ContextMenu;
-            var autoUpdateItem = (System.Windows.Controls.MenuItem)contextMenu.FindName("AutoUpdateMenuItem");
+            var autoUpdateItem = (System.Windows.Controls.MenuItem)FindElementByName(contextMenu, "AutoUpdateMenuItem");
             if (autoUpdateItem != null) autoUpdateItem.IsChecked = AppSettings.Shared.AutoUpdateEnabled;
             
-            var runOnStartupItem = (System.Windows.Controls.MenuItem)contextMenu.FindName("RunOnStartupMenuItem");
+            var runOnStartupItem = (System.Windows.Controls.MenuItem)FindElementByName(contextMenu, "RunOnStartupMenuItem");
             if (runOnStartupItem != null) runOnStartupItem.IsChecked = AppSettings.Shared.RunOnStartup;
 
             // Startup features
@@ -77,6 +77,28 @@ namespace PauselyWindows
             {
                 _ = UpdateService.Shared.CheckForUpdateAsync();
             }
+        }
+
+        private object FindElementByName(System.Windows.Controls.ItemsControl parent, string name)
+        {
+            if (parent == null) return null;
+
+            foreach (var item in parent.Items)
+            {
+                if (item is FrameworkElement fe && fe.Name == name) return fe;
+                
+                if (item is System.Windows.Controls.MenuItem mi)
+                {
+                    if (mi.Header is FrameworkElement headerFe && headerFe.Name == name) return headerFe;
+                    
+                    if (mi.Items.Count > 0)
+                    {
+                        var found = FindElementByName(mi, name);
+                        if (found != null) return found;
+                    }
+                }
+            }
+            return null;
         }
 
         private void BreakManager_StatusChanged(object sender, EventArgs e)
@@ -96,7 +118,7 @@ namespace PauselyWindows
                 var contextMenu = _taskbarIcon.ContextMenu;
                 if (contextMenu == null) return;
                 
-                var statusItem = (System.Windows.Controls.MenuItem)contextMenu.FindName("StatusMenuItem");
+                var statusItem = (System.Windows.Controls.MenuItem)FindElementByName(contextMenu, "StatusMenuItem");
                 
                 if (statusItem != null)
                 {
@@ -119,7 +141,7 @@ namespace PauselyWindows
                     }
                 }
 
-                var startBreakButton = (System.Windows.Controls.Button)contextMenu.FindName("StartBreakButton");
+                var startBreakButton = (System.Windows.Controls.Button)FindElementByName(contextMenu, "StartBreakButton");
                 if (startBreakButton != null)
                 {
                     startBreakButton.Content = _breakManager.IsSyncedSession ? "Start Intermission" : "Start Break Now";

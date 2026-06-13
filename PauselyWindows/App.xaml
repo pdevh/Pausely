@@ -14,7 +14,7 @@
             </ResourceDictionary.MergedDictionaries>
 
             <!-- ContextMenu goes here, after MergedDictionaries -->
-            <ContextMenu x:Shared="false" x:Key="SysTrayMenu">
+            <ContextMenu x:Key="SysTrayMenu">
                 <MenuItem x:Name="StatusMenuItem" IsEnabled="False">
                     <MenuItem.HeaderTemplate>
                         <DataTemplate>
