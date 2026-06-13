@@ -41,6 +41,13 @@ namespace PauselyWindows
                 ToolTipText = "Pausely MVP",
                 ContextMenu = (System.Windows.Controls.ContextMenu)FindResource("SysTrayMenu")
             };
+            _taskbarIcon.TrayLeftMouseUp += (s, args) =>
+            {
+                if (_taskbarIcon.ContextMenu != null)
+                {
+                    _taskbarIcon.ContextMenu.IsOpen = true;
+                }
+            };
 
             _breakManager = BreakManager.Shared;
             _breakManager.WorkInterval = AppSettings.Shared.WorkInterval;
@@ -250,10 +257,13 @@ namespace PauselyWindows
         {
             var menuItem = (System.Windows.Controls.MenuItem)sender;
             var parent = (System.Windows.Controls.MenuItem)menuItem.Parent;
-            foreach (System.Windows.Controls.MenuItem item in parent.Items) item.IsChecked = false;
+            foreach (var item in parent.Items)
+            {
+                if (item is System.Windows.Controls.MenuItem mi) mi.IsChecked = false;
+            }
             menuItem.IsChecked = true;
 
-            if (int.TryParse(menuItem.Tag.ToString(), out int seconds))
+            if (menuItem.Tag != null && int.TryParse(menuItem.Tag.ToString(), out int seconds))
             {
                 Logger.Info($"User set work interval to {seconds} seconds.");
                 _breakManager.WorkInterval = seconds;
@@ -266,10 +276,13 @@ namespace PauselyWindows
         {
             var menuItem = (System.Windows.Controls.MenuItem)sender;
             var parent = (System.Windows.Controls.MenuItem)menuItem.Parent;
-            foreach (System.Windows.Controls.MenuItem item in parent.Items) item.IsChecked = false;
+            foreach (var item in parent.Items)
+            {
+                if (item is System.Windows.Controls.MenuItem mi) mi.IsChecked = false;
+            }
             menuItem.IsChecked = true;
 
-            if (int.TryParse(menuItem.Tag.ToString(), out int seconds))
+            if (menuItem.Tag != null && int.TryParse(menuItem.Tag.ToString(), out int seconds))
             {
                 Logger.Info($"User set break duration to {seconds} seconds.");
                 _breakManager.BreakDuration = seconds;

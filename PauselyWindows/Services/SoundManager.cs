@@ -15,11 +15,11 @@ namespace PauselyWindows.Services
                 Logger.Info("Attempting to play break start sound...");
                 // Try reading user's default notification sound from registry
                 string registryKey = @"AppEvents\Schemes\Apps\.Default\Notification.Default\.Current";
-                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(registryKey))
+                using (RegistryKey? key = Registry.CurrentUser.OpenSubKey(registryKey))
                 {
                     if (key != null)
                     {
-                        object val = key.GetValue("");
+                        object? val = key.GetValue("");
                         if (val != null && val is string soundPath && !string.IsNullOrWhiteSpace(soundPath))
                         {
                             if (File.Exists(soundPath))

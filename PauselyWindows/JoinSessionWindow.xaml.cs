@@ -65,8 +65,8 @@ namespace PauselyWindows
         private void UpdateHighlights()
         {
             int activeIndex = Math.Min(HiddenInput.Text.Length, 5);
-            var defaultBrush = TryFindResource("ControlStrokeColorDefaultBrush") as Brush ?? Brushes.Gray;
-            var activeBrush = TryFindResource("SystemAccentColorPrimaryBrush") as Brush ?? Brushes.DodgerBlue;
+            var defaultBrush = TryFindResource("ControlStrokeColorDefaultBrush") as System.Windows.Media.Brush ?? System.Windows.Media.Brushes.Gray;
+            var activeBrush = TryFindResource("SystemAccentColorPrimaryBrush") as System.Windows.Media.Brush ?? System.Windows.Media.Brushes.DodgerBlue;
 
             for (int i = 0; i < 6; i++)
             {
