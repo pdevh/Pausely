@@ -7,6 +7,7 @@
         WindowBackdropType="Acrylic"
         Topmost="True"
         ShowInTaskbar="False"
+        ExtendsContentIntoTitleBar="True"
         Loaded="Window_Loaded">
     
     <Grid>
@@ -21,7 +22,7 @@
             
             <StackPanel>
                 <TextBlock x:Name="TitleText" Text="Time to step away" Foreground="{DynamicResource TextFillColorPrimaryBrush}" 
-                           FontFamily="Segoe UI Variable Display" FontSize="48" FontWeight="SemiLight" 
+                           FontFamily="Segoe UI Variable Display" FontSize="48" FontWeight="Light" 
                            HorizontalAlignment="Center" Margin="0,0,0,20"/>
                 
                 <Grid Margin="0,0,0,40" HorizontalAlignment="Center">

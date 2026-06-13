@@ -131,8 +131,11 @@ namespace PauselyWindows
         protected override void OnClosed(EventArgs e)
         {
             Logger.Info("OverlayWindow closed. Cleaning up event listeners.");
-            _breakManager.TimerTicked -= BreakManager_TimerTicked;
-            _breakManager.BreakEnding -= BreakManager_BreakEnding;
+            if (_breakManager != null)
+            {
+                _breakManager.TimerTicked -= BreakManager_TimerTicked;
+                _breakManager.BreakEnding -= BreakManager_BreakEnding;
+            }
             base.OnClosed(e);
         }
     }
