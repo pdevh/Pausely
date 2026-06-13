@@ -169,6 +169,9 @@ namespace PauselyWindows
         {
             Dispatcher.Invoke(() =>
             {
+                // Capture current wallpaper before showing overlay
+                WallpaperCaptureService.Shared.Refresh();
+
                 // Play Sound
                 SoundManager.PlayStartSound();
 
@@ -236,6 +239,9 @@ namespace PauselyWindows
         {
             Dispatcher.Invoke(() =>
             {
+                // Capture current wallpaper before showing overlay
+                WallpaperCaptureService.Shared.Refresh();
+
                 SoundManager.PlayStartSound();
 
                 foreach (var window in _overlayWindows)
