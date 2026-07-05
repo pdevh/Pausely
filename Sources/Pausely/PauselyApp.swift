@@ -166,6 +166,10 @@ class MenuManager: NSObject, NSMenuDelegate {
     private let breakManager = BreakManager.shared
     private var statusMenuItemView: StatusMenuItemView?
     private var sessionDialogWindow: NSWindow?
+    private lazy var eyeOpenImage = NSImage(systemSymbolName: "eye.fill", accessibilityDescription: "Pausely")
+    private lazy var eyeClosedImage = NSImage(systemSymbolName: "eye.slash.fill", accessibilityDescription: "Pausely")
+    private lazy var pauseImage = NSImage(systemSymbolName: "pause.fill", accessibilityDescription: "Pausely")
+    private var lastRenderedStatus: BreakStatus?
     
     func setupMenuBar() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -188,25 +192,37 @@ class MenuManager: NSObject, NSMenuDelegate {
     func updateStatusItemLabel() {
         guard let button = statusItem?.button else { return }
         
-        let imageName = breakManager.status == .inBreak ? "eye.slash.fill" : "eye.fill"
-        button.image = NSImage(systemSymbolName: imageName, accessibilityDescription: "Pausely")
-        button.imagePosition = .imageLeading
+        // Only recreate image when status actually changes (a few times/hour, not every second)
+        if lastRenderedStatus != breakManager.status {
+            lastRenderedStatus = breakManager.status
+            switch breakManager.status {
+            case .inBreak:  button.image = eyeClosedImage
+            case .paused:   button.image = pauseImage
+            case .working:  button.image = eyeOpenImage
+            }
+            button.imagePosition = .imageLeading
+        }
         
         let titleText: String
-        if breakManager.status == .working {
-            titleText = timeFormatted(breakManager.timeRemaining)
-        } else {
-            titleText = "Break!"
+        switch breakManager.status {
+        case .working:  titleText = timeFormatted(breakManager.timeRemaining)
+        case .inBreak:  titleText = "Break!"
+        case .paused:   titleText = timeFormatted(breakManager.timeRemaining)
         }
         button.title = titleText
         
         // Update the custom view label in the dropdown — this avoids
         // NSMenu layout invalidation that would reset hover highlights
-        let statusText = breakManager.status == .inBreak
-            ? "Break in progress"
-            : "Next break in \(timeFormatted(breakManager.timeRemaining))"
+        let statusText: String
+        switch breakManager.status {
+        case .working:  statusText = "Next break in \(timeFormatted(breakManager.timeRemaining))"
+        case .inBreak:  statusText = "Break in progress"
+        case .paused:   statusText = "Breaks paused · \(timeFormatted(breakManager.timeRemaining)) left"
+        }
         statusMenuItemView?.text = statusText
-        let progress = 1.0 - (Double(breakManager.timeRemaining) / breakManager.workInterval)
+        let progress = breakManager.status == .working
+            ? 1.0 - (Double(breakManager.timeRemaining) / breakManager.workInterval)
+            : 0.0
         statusMenuItemView?.progress = max(0.0, min(1.0, progress))
     }
     
@@ -231,6 +247,22 @@ class MenuManager: NSObject, NSMenuDelegate {
         let primaryButtonView = PrimaryButtonMenuItemView(title: buttonTitle, target: self, action: #selector(startBreakClicked))
         startBreakItem.view = primaryButtonView
         menu.addItem(startBreakItem)
+        
+        // Pause / Resume Breaks
+        if breakManager.status == .paused {
+            let resumeItem = NSMenuItem(title: "Resume Breaks", action: #selector(resumeBreaksClicked), keyEquivalent: "")
+            resumeItem.target = self
+            resumeItem.image = NSImage(systemSymbolName: "play.fill", accessibilityDescription: nil)
+            menu.addItem(resumeItem)
+        } else {
+            let pauseDuration = breakManager.suggestedPauseDuration
+            let pauseTitle = "Pause Breaks (\(formatFriendlyDuration(pauseDuration)))"
+            let pauseItem = NSMenuItem(title: pauseTitle, action: #selector(pauseBreaksClicked), keyEquivalent: "")
+            pauseItem.target = self
+            pauseItem.isEnabled = !breakManager.isSyncedSession && breakManager.status == .working
+            pauseItem.image = NSImage(systemSymbolName: "pause.fill", accessibilityDescription: nil)
+            menu.addItem(pauseItem)
+        }
         
         menu.addItem(NSMenuItem.separator())
         
@@ -476,6 +508,29 @@ class MenuManager: NSObject, NSMenuDelegate {
     
     @objc private func quitClicked() {
         NSApplication.shared.terminate(nil)
+    }
+    
+    @objc private func pauseBreaksClicked() {
+        breakManager.pauseBreaks()
+        buildMenu()
+    }
+    
+    @objc private func resumeBreaksClicked() {
+        breakManager.resumeBreaks()
+        buildMenu()
+    }
+    
+    /// Formats a duration into a human-friendly string rounded to the nearest 15 minutes.
+    /// Examples: 3600 → "1h", 5400 → "1h 30m", 1800 → "30m", 60 → "1m".
+    private func formatFriendlyDuration(_ seconds: TimeInterval) -> String {
+        let totalMinutes = Int(seconds.rounded()) / 60
+        let hours = totalMinutes / 60
+        let minutes = totalMinutes % 60
+        
+        if hours > 0 && minutes > 0 { return "\(hours)h \(minutes)m" }
+        if hours > 0               { return "\(hours)h" }
+        if minutes > 0             { return "\(minutes)m" }
+        return "\(Int(seconds.rounded()))s"
     }
     
     private func timeFormatted(_ totalSeconds: Int) -> String {

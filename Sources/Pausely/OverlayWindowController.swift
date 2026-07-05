@@ -77,6 +77,9 @@ class OverlayWindowController {
 
         // Setup local keyboard monitor for Escape key
         setupEscapeKeyMonitor(breakManager: breakManager)
+        
+        // Hide the cursor warning perfectly seamlessly as the break overlays present
+        CursorWarningManager.shared.hide()
     }
     
     func closeOverlays(cancelWallpaperRefresh: Bool = true) {

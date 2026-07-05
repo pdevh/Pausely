@@ -5,6 +5,7 @@ import SwiftUI
 enum BreakStatus {
     case working
     case inBreak
+    case paused
 }
 
 class BreakManager: ObservableObject {
@@ -21,6 +22,9 @@ class BreakManager: ObservableObject {
     private var skippedCycleIndices: Set<Int> = []
     private var isApplyingSync = false
     private var snoozeEndTime: Date? = nil
+    @Published var currentBreakPrompt: BreakPrompt?
+    @Published var currentIntermissionPrompt: MicrobreakPrompt?
+    
     private var lastBreakDisplayedTime: Date = Date()
     private var preBreakActiveApp: NSRunningApplication?
     
@@ -90,6 +94,7 @@ class BreakManager: ObservableObject {
     @objc private func screenDidLock() {
         isScreenLocked = true
         gcdTimer?.suspend()
+        CursorWarningManager.shared.hide()
         // Dismiss any active overlay immediately
         if status == .inBreak {
             isEnding = false // allow closeOverlays to work
@@ -100,6 +105,12 @@ class BreakManager: ObservableObject {
                 timeRemaining = Int(workInterval)
             }
             snoozesLeft = 4
+        }
+        // If paused when screen locks, reset to normal working state —
+        // locking the screen is essentially a break already.
+        if status == .paused {
+            status = .working
+            timeRemaining = Int(workInterval)
         }
         if isInIntermission {
             isInIntermission = false
@@ -188,14 +199,44 @@ class BreakManager: ObservableObject {
             }
             
         } else {
-            if timeRemaining > 0 {
-                timeRemaining -= 1
-            } else {
-                if status == .working {
-                    triggerBreak()
+            if status == .paused {
+                // Count down the pause; resume automatically when it hits zero
+                if timeRemaining > 0 {
+                    timeRemaining -= 1
                 } else {
-                    endBreak()
+                    resumeBreaks()
                 }
+            } else {
+                if timeRemaining > 0 {
+                    timeRemaining -= 1
+                } else {
+                    if status == .working {
+                        triggerBreak()
+                    } else {
+                        endBreak()
+                    }
+                }
+            }
+        }
+        
+        // Pre-fetch wallpaper ~30s before break for instant overlay presentation.
+        // This replaces the old 24/7 periodic capture with a targeted on-demand fetch.
+        if status == .working && timeRemaining == 30 && !isScreenLocked {
+            Task { @MainActor in
+                RenderedWallpaperProvider.shared.refresh(for: NSScreen.screens)
+            }
+        }
+        
+        // Handle cursor warning logic centrally at the end of tick
+        if status == .working && timeRemaining <= 10 && timeRemaining > 0 && !isEnding && !isScreenLocked {
+            if CursorWarningManager.shared.viewModel.isVisible == false {
+                CursorWarningManager.shared.show(timeRemaining: timeRemaining)
+            } else {
+                CursorWarningManager.shared.update(timeRemaining: timeRemaining)
+            }
+        } else if status == .working && timeRemaining > 10 {
+            if CursorWarningManager.shared.viewModel.isVisible {
+                CursorWarningManager.shared.hide()
             }
         }
         
@@ -207,6 +248,13 @@ class BreakManager: ObservableObject {
         
         status = .inBreak
         lastBreakDisplayedTime = Date()
+        
+        if breakDuration >= 60 {
+            currentBreakPrompt = BreakPrompts.randomBreak()
+        } else {
+            let micro = BreakPrompts.randomMicrobreak()
+            currentBreakPrompt = BreakPrompt(title: "Take a breather", message: micro.message)
+        }
         
         if !isSyncedSession {
             timeRemaining = Int(breakDuration)
@@ -242,7 +290,8 @@ class BreakManager: ObservableObject {
             }
             self.snoozesLeft = 4 // Reset snoozes at full break completion
             
-            // Close overlays
+            // Close overlays and warnings
+            CursorWarningManager.shared.hide()
             self.overlayController.closeOverlays()
             
             // Restore hidden apps
@@ -281,7 +330,8 @@ class BreakManager: ObservableObject {
                 self.timeRemaining = Int(snoozeDuration)
             }
             
-            // Close overlays
+            // Close overlays and warnings
+            CursorWarningManager.shared.hide()
             self.overlayController.closeOverlays()
             
             // Restore hidden apps
@@ -295,6 +345,31 @@ class BreakManager: ObservableObject {
         }
     }
     
+    // MARK: - Pause Breaks
+
+    /// The suggested pause duration: 2 full work+break cycles, rounded to
+    /// the nearest 15 minutes. For very short test intervals the raw value
+    /// is used instead so the rounding doesn't collapse it to zero.
+    var suggestedPauseDuration: TimeInterval {
+        let raw = 2 * (workInterval + breakDuration)
+        let fifteenMinutes: TimeInterval = 900
+        let rounded = (raw / fifteenMinutes).rounded() * fifteenMinutes
+        return rounded > 0 ? rounded : raw
+    }
+
+    func pauseBreaks() {
+        guard !isSyncedSession, status == .working else { return }
+        CursorWarningManager.shared.hide()
+        status = .paused
+        timeRemaining = Int(suggestedPauseDuration)
+    }
+
+    func resumeBreaks() {
+        guard status == .paused else { return }
+        status = .working
+        timeRemaining = Int(workInterval)
+    }
+
     func skipBreak() {
         if isSyncedSession {
             let cycleDuration = workInterval + breakDuration
@@ -309,6 +384,7 @@ class BreakManager: ObservableObject {
         guard !isInIntermission else { return }
         isInIntermission = true
         intermissionTimeRemaining = Int(breakDuration)
+        currentIntermissionPrompt = BreakPrompts.randomMicrobreak()
         
         // Hide other apps so the moving wallpaper is visible
         preBreakActiveApp = NSWorkspace.shared.frontmostApplication

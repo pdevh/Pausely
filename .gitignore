@@ -45,3 +45,5 @@ Temporary Items
 /PauselyWindows/bin
 /PauselyWindows/obj
 .idea
+tests/*
+.ahadiff/*

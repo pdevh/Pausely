@@ -3,6 +3,7 @@ import CoreGraphics
 import CoreImage
 import Foundation
 import ScreenCaptureKit
+import ImageIO
 
 struct RenderedWallpaperSnapshot {
     let displayID: CGDirectDisplayID
@@ -52,44 +53,11 @@ final class RenderedWallpaperProvider: ObservableObject {
 
     private var refreshTask: Task<Void, Never>?
     private var refreshGeneration = 0
-    
-    private var periodicCaptureTask: Task<Void, Never>?
     private var cachedSnapshots: [CGDirectDisplayID: RenderedWallpaperSnapshot] = [:]
 
-    private init() {
-        startPeriodicCapture()
-    }
+    private init() {}
     
-    private func startPeriodicCapture() {
-        periodicCaptureTask?.cancel()
-        periodicCaptureTask = Task { [weak self] in
-            // Initial delay before starting the background loop
-            try? await Task.sleep(nanoseconds: 5_000_000_000)
-            while !Task.isCancelled {
-                guard let self = self else { break }
-                
-                // Only capture if we have permission to avoid spamming the user
-                if CGPreflightScreenCaptureAccess() {
-                    let screens = NSScreen.screens
-                    let targets = screens.compactMap(WallpaperCaptureTarget.init(screen:))
-                    if !targets.isEmpty {
-                        if let newSnapshots = try? await RenderedWallpaperCapturer.capture(targets: targets, cachedSnapshots: self.cachedSnapshots) {
-                            for snapshot in newSnapshots {
-                                self.cachedSnapshots[snapshot.displayID] = snapshot
-                            }
-                        }
-                    }
-                }
-                
-                try? await Task.sleep(nanoseconds: 30_000_000_000)
-            }
-        }
-    }
 
-    private func stopPeriodicCapture() {
-        periodicCaptureTask?.cancel()
-        periodicCaptureTask = nil
-    }
 
     @discardableResult
     func requestScreenCapturePermissionIfNeeded() -> Bool {
@@ -236,6 +204,48 @@ private enum RenderedWallpaperCaptureError: LocalizedError {
 }
 
 private enum RenderedWallpaperCapturer {
+    private static let sharedCIContext = CIContext(options: [.priorityRequestLow: true])
+
+    // MARK: - Disk Caching Helpers
+    
+    private static func cacheDirectoryURL() -> URL {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("Pausely/wallpapers", isDirectory: true)
+    }
+
+    private static func blurredWallpaperCacheURL(for displayID: CGDirectDisplayID) -> URL {
+        cacheDirectoryURL().appendingPathComponent("wallpaper_blurred_\(displayID).png", isDirectory: false)
+    }
+
+    private static func saveBlurredImage(_ cgImage: CGImage, for displayID: CGDirectDisplayID) {
+        let url = blurredWallpaperCacheURL(for: displayID)
+        let dir = cacheDirectoryURL()
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            guard let destination = CGImageDestinationCreateWithURL(url as CFURL, "public.png" as CFString, 1, nil) else {
+                return
+            }
+            CGImageDestinationAddImage(destination, cgImage, nil)
+            CGImageDestinationFinalize(destination)
+        } catch {
+            // Ignore cache save failures
+        }
+    }
+
+    private static func loadBlurredImage(for displayID: CGDirectDisplayID, pointSize: NSSize) -> NSImage? {
+        let url = blurredWallpaperCacheURL(for: displayID)
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return nil
+        }
+        guard let data = try? Data(contentsOf: url),
+              let nsImage = NSImage(data: data) else {
+            return nil
+        }
+        nsImage.size = pointSize
+        print("💾 Loaded blurred wallpaper from disk cache for display \(displayID)")
+        return nsImage
+    }
+
     static func capture(targets: [WallpaperCaptureTarget], cachedSnapshots: [CGDirectDisplayID: RenderedWallpaperSnapshot]) async throws -> [RenderedWallpaperSnapshot] {
         guard #available(macOS 14.0, *) else {
             throw RenderedWallpaperCaptureError.unsupportedOS
@@ -252,11 +262,17 @@ private enum RenderedWallpaperCapturer {
                             return try await captureDisplay(display, target: target, excludingWindows: content.windows, cachedSnapshot: cachedSnapshots[target.displayID])
                         } catch {
                             if let cached = cachedSnapshots[target.displayID] { return cached }
+                            if let diskCachedBlurred = loadBlurredImage(for: target.displayID, pointSize: target.pointSize) {
+                                return RenderedWallpaperSnapshot(displayID: target.displayID, crisp: diskCachedBlurred, blurred: diskCachedBlurred)
+                            }
                             if let fileFallback = loadFileWallpaper(for: target) { return fileFallback }
                             throw error
                         }
                     } else {
                         if let cached = cachedSnapshots[target.displayID] { return cached }
+                        if let diskCachedBlurred = loadBlurredImage(for: target.displayID, pointSize: target.pointSize) {
+                            return RenderedWallpaperSnapshot(displayID: target.displayID, crisp: diskCachedBlurred, blurred: diskCachedBlurred)
+                        }
                         if let fileFallback = loadFileWallpaper(for: target) { return fileFallback }
                         throw RenderedWallpaperCaptureError.missingDisplay(target.displayID)
                     }
@@ -319,11 +335,19 @@ private enum RenderedWallpaperCapturer {
         
         if isImageBlack(crisp) {
             if let cached = cachedSnapshot { return cached }
+            if let diskCachedBlurred = loadBlurredImage(for: target.displayID, pointSize: target.pointSize) {
+                return RenderedWallpaperSnapshot(displayID: target.displayID, crisp: diskCachedBlurred, blurred: diskCachedBlurred)
+            }
             if let fileFallback = loadFileWallpaper(for: target) { return fileFallback }
         }
 
         let blurredImage = makeBlurredImage(from: image, pointSize: target.pointSize)
         let blurred = NSImage(cgImage: blurredImage, size: target.pointSize)
+
+        let displayID = target.displayID
+        Task {
+            saveBlurredImage(blurredImage, for: displayID)
+        }
 
         return RenderedWallpaperSnapshot(displayID: target.displayID, crisp: crisp, blurred: blurred)
     }
@@ -352,8 +376,7 @@ private enum RenderedWallpaperCapturer {
             .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 11])
             .cropped(to: CGRect(origin: .zero, size: downsampledSize))
 
-        let context = CIContext(options: [.priorityRequestLow: true])
-        return context.createCGImage(ciImage, from: CGRect(origin: .zero, size: downsampledSize)) ?? image
+        return sharedCIContext.createCGImage(ciImage, from: CGRect(origin: .zero, size: downsampledSize)) ?? image
     }
     
     // MARK: - Fallback Helpers
@@ -372,8 +395,7 @@ private enum RenderedWallpaperCapturer {
         ]), let outputImage = avgFilter.outputImage else { return true }
         
         var pixel = [UInt8](repeating: 0, count: 4)
-        let context = CIContext(options: [.workingColorSpace: NSNull()])
-        context.render(outputImage, toBitmap: &pixel, rowBytes: 4,
+        sharedCIContext.render(outputImage, toBitmap: &pixel, rowBytes: 4,
                        bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
                        format: .RGBA8, colorSpace: CGColorSpaceCreateDeviceRGB())
         let maxChannel = max(pixel[0], pixel[1], pixel[2])
@@ -381,6 +403,7 @@ private enum RenderedWallpaperCapturer {
     }
     
     private static func loadFileWallpaper(for target: WallpaperCaptureTarget) -> RenderedWallpaperSnapshot? {
+        print("📁 Falling back to loadFileWallpaper for display \(target.displayID)")
         var resolvedImage: NSImage? = nil
 
         // 1. Try NSWorkspace desktopImageURL
@@ -435,6 +458,12 @@ private enum RenderedWallpaperCapturer {
             }
             let blurredCG = makeBlurredImage(from: cgImg, pointSize: size)
             let blurred = NSImage(cgImage: blurredCG, size: size)
+            
+            let displayID = target.displayID
+            Task {
+                saveBlurredImage(blurredCG, for: displayID)
+            }
+            
             return RenderedWallpaperSnapshot(displayID: target.displayID, crisp: img, blurred: blurred)
         }
 
@@ -444,6 +473,11 @@ private enum RenderedWallpaperCapturer {
         let crisp = NSImage(cgImage: cgImg, size: target.pointSize)
         let blurredCG = makeBlurredImage(from: cgImg, pointSize: target.pointSize)
         let blurred = NSImage(cgImage: blurredCG, size: target.pointSize)
+
+        let displayID = target.displayID
+        Task {
+            saveBlurredImage(blurredCG, for: displayID)
+        }
 
         return RenderedWallpaperSnapshot(displayID: target.displayID, crisp: crisp, blurred: blurred)
     }

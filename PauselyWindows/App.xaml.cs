@@ -37,7 +37,7 @@ namespace PauselyWindows
             };
             _taskbarIcon = new TaskbarIcon
             {
-                Icon = SystemIcons.Application,
+                Icon = LoadApplicationIcon(),
                 ToolTipText = "Pausely MVP",
                 ContextMenu = (System.Windows.Controls.ContextMenu)FindResource("SysTrayMenu")
             };
@@ -409,6 +409,24 @@ namespace PauselyWindows
             _overlayWindows.Clear();
             _taskbarIcon?.Dispose();
             Current.Shutdown();
+        }
+
+        private static System.Drawing.Icon LoadApplicationIcon()
+        {
+            try
+            {
+                var iconUri = new Uri("pack://application:,,,/Pausely.ico");
+                var streamInfo = System.Windows.Application.GetResourceStream(iconUri);
+                if (streamInfo != null)
+                {
+                    return new System.Drawing.Icon(streamInfo.Stream);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("Failed to load application icon resource, falling back to default.", ex);
+            }
+            return SystemIcons.Application;
         }
     }
 }

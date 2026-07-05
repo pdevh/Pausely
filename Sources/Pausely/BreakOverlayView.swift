@@ -520,7 +520,7 @@ struct BreakOverlayView: View {
                 // ──────────────────────────────────────────────
                 VStack(spacing: 24) {
                     // Main Text (Phase 1: blur + downward movement from above)
-                    Text(isIntermission ? "Voluntary break" : "Eyes to the horizon")
+                    Text(isIntermission ? "Voluntary break" : (breakManager.currentBreakPrompt?.title ?? "Eyes to the horizon"))
                         .font(.system(size: 52, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
                         .blur(radius: mainTextBlur)
@@ -528,9 +528,12 @@ struct BreakOverlayView: View {
                         .opacity(mainTextOpacity)
                     
                     // Secondary Text (Phase 2: blur only, no movement)
-                    Text(isIntermission ? "Take a moment to rest your eyes" : "Set your eyes on something distant until the countdown is over")
+                    Text(isIntermission ? (breakManager.currentIntermissionPrompt?.message ?? "Take a moment to rest your eyes") : (breakManager.currentBreakPrompt?.message ?? "Set your eyes on something distant until the countdown is over"))
                         .font(.system(size: 18, weight: .medium, design: .rounded))
                         .foregroundColor(.white.opacity(0.85))
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(4)
+                        .frame(maxWidth: 700)
                         .blur(radius: secondaryTextBlur)
                         .opacity(secondaryTextOpacity)
                     
@@ -676,6 +679,12 @@ private struct CurrentTimeView: View {
     @State private var currentTime: String = ""
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return f
+    }()
+    
     var body: some View {
         Text(currentTime)
             .font(.system(size: 13, weight: .semibold, design: .rounded))
@@ -684,9 +693,7 @@ private struct CurrentTimeView: View {
     }
     
     private func updateTime() {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        currentTime = formatter.string(from: Date())
+        currentTime = Self.timeFormatter.string(from: Date())
     }
 }
 
