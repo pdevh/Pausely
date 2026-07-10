@@ -4,20 +4,203 @@
         Title="Pausely Overlay"
         WindowStyle="None"
         AllowsTransparency="True"
+        Background="Transparent"
         Topmost="True"
-        Background="#D0000000"
         ShowInTaskbar="False"
-        Loaded="Window_Loaded">
-    <Grid>
-        <!-- Overlay for darkening the background -->
-        <Rectangle Fill="#A0000000" />
-        
-        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-            <TextBlock x:Name="TitleText" Text="Time to step away" Foreground="White" FontSize="48" FontWeight="Light" HorizontalAlignment="Center" Margin="0,0,0,20"/>
-            <TextBlock x:Name="TimerText" Text="20" Foreground="White" FontSize="120" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,40"/>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                <Button x:Name="SnoozeButton" Content="Snooze" Width="150" Height="40" Margin="0,0,20,0" Click="Snooze_Click" Background="#444" Foreground="White" BorderThickness="0" FontSize="16"/>
-                <Button Content="Lock Screen" Width="150" Height="40" Click="LockScreen_Click" Background="#444" Foreground="White" BorderThickness="0" FontSize="16"/>
+        Loaded="Window_Loaded"
+        PreviewKeyDown="Window_PreviewKeyDown">
+
+    <Window.Resources>
+        <!-- Shared font families -->
+        <FontFamily x:Key="DisplayFont">Segoe UI Variable Display, Segoe UI</FontFamily>
+        <FontFamily x:Key="TextFont">Segoe UI Variable Text, Segoe UI</FontFamily>
+
+        <!-- Glass button style matching Win11 idiom -->
+        <Style x:Key="GlassButtonStyle" TargetType="Button">
+            <Setter Property="FontFamily" Value="{StaticResource TextFont}" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Padding" Value="24,12" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonBorder" CornerRadius="20" 
+                                Background="#14FFFFFF" BorderBrush="#26FFFFFF" BorderThickness="1.5"
+                                Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                            <Border.Effect>
+                                <DropShadowEffect Color="Black" Opacity="0.15" BlurRadius="10" ShadowDepth="5" Direction="270" />
+                            </Border.Effect>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#29FFFFFF" />
+                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#40FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#1AFFFFFF" />
+                                <Setter TargetName="ButtonBorder" Property="RenderTransform">
+                                    <Setter.Value>
+                                        <ScaleTransform ScaleX="0.97" ScaleY="0.97" />
+                                    </Setter.Value>
+                                </Setter>
+                                <Setter TargetName="ButtonBorder" Property="RenderTransformOrigin" Value="0.5,0.5" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid x:Name="RootGrid">
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- Layer 0: Solid black fallback (always present)         -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <Rectangle x:Name="BlackFallback" Fill="Black" Opacity="0" />
+
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- Layer 1: Crisp wallpaper                               -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <Image x:Name="CrispWallpaperImage" Stretch="UniformToFill" Opacity="0" />
+
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- Layer 2: Blurred wallpaper (fades in on top of crisp)  -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <Image x:Name="BlurredWallpaperImage" Stretch="UniformToFill" Opacity="0">
+            <Image.RenderTransform>
+                <ScaleTransform ScaleX="1.05" ScaleY="1.05" CenterX="0.5" CenterY="0.5" />
+            </Image.RenderTransform>
+            <Image.RenderTransformOrigin>
+                <Point X="0.5" Y="0.5" />
+            </Image.RenderTransformOrigin>
+        </Image>
+
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- Layer 3: Dim overlay to ensure text readability        -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <Rectangle x:Name="DimOverlay" Fill="Black" Opacity="0" />
+
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- Layer 4: Clock at top of screen (slides in from above) -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <StackPanel x:Name="ClockPanel" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Top"
+                    Margin="0,28,0,0" Opacity="0">
+            <StackPanel.RenderTransform>
+                <TranslateTransform x:Name="ClockTranslate" Y="-80" />
+            </StackPanel.RenderTransform>
+            <TextBlock Text="🕐" FontSize="13" Foreground="#99FFFFFF" VerticalAlignment="Center" Margin="0,0,6,0" />
+            <TextBlock x:Name="CurrentTimeText" Text="" FontFamily="{StaticResource TextFont}" 
+                       FontSize="13" FontWeight="SemiBold" Foreground="#99FFFFFF" VerticalAlignment="Center" />
+        </StackPanel>
+
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- Layer 5: Centered main content                         -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+
+            <!-- Title text (Phase 1: opacity + slide down) -->
+            <TextBlock x:Name="TitleText" Text="Eyes to the horizon"
+                       FontFamily="{StaticResource DisplayFont}" FontSize="52" FontWeight="Bold"
+                       Foreground="White" HorizontalAlignment="Center" Margin="0,0,0,20"
+                       Opacity="0">
+                <TextBlock.RenderTransform>
+                    <TranslateTransform x:Name="TitleTranslate" Y="-30" />
+                </TextBlock.RenderTransform>
+            </TextBlock>
+
+            <!-- Subtitle text (Phase 2: opacity fade) -->
+            <TextBlock x:Name="SubtitleText" Text="Set your eyes on something distant until the countdown is over"
+                       FontFamily="{StaticResource TextFont}" FontSize="18" FontWeight="Normal"
+                       Foreground="#D9FFFFFF" HorizontalAlignment="Center" Margin="0,0,0,24"
+                       Opacity="0">
+                <TextBlock.RenderTransform>
+                    <TranslateTransform x:Name="SubtitleTranslate" Y="12" />
+                </TextBlock.RenderTransform>
+            </TextBlock>
+
+            <!-- Elegant divider (Phase 3) -->
+            <Rectangle x:Name="Divider" Width="80" Height="1.5" Fill="#40FFFFFF" 
+                        HorizontalAlignment="Center" Margin="0,0,0,24" Opacity="0" />
+
+            <!-- Countdown timer (Phase 3) -->
+            <Grid x:Name="TimerContainer" HorizontalAlignment="Center" Margin="0,0,0,32" Opacity="0">
+                <Grid.RenderTransform>
+                    <TranslateTransform x:Name="TimerTranslate" Y="16" />
+                </Grid.RenderTransform>
+                
+                <!-- Soft directional drop shadow — lifts the glass off the background -->
+                <Grid.Effect>
+                    <DropShadowEffect Color="Black" Opacity="0.12" BlurRadius="14" ShadowDepth="6" Direction="270" />
+                </Grid.Effect>
+
+                <!-- Layer 1: Specular highlight (BELOW body) — only top-left edge peeks out -->
+                <TextBlock Text="{Binding ElementName=TimerText, Path=Text}"
+                           Foreground="#45FFFFFF"
+                           FontFamily="{StaticResource DisplayFont}" FontSize="120" FontWeight="Bold"
+                           HorizontalAlignment="Center" Margin="-0.7,-0.7,0.7,0.7" />
+
+                <!-- Layer 2: Inner shadow (BELOW body) — only bottom-right edge peeks out -->
+                <TextBlock Text="{Binding ElementName=TimerText, Path=Text}"
+                           Foreground="#20000000"
+                           FontFamily="{StaticResource DisplayFont}" FontSize="120" FontWeight="Bold"
+                           HorizontalAlignment="Center" Margin="0.7,0.7,-0.7,-0.7" />
+
+                <!-- Layer 3: Glass body — very faint vertical gradient (light from above) -->
+                <TextBlock x:Name="TimerText" Text="00:20"
+                           FontFamily="{StaticResource DisplayFont}" FontSize="120" FontWeight="Bold"
+                           HorizontalAlignment="Center">
+                    <TextBlock.Foreground>
+                        <LinearGradientBrush StartPoint="0.5,0" EndPoint="0.5,1">
+                            <GradientStop Color="#28FFFFFF" Offset="0.0" />
+                            <GradientStop Color="#10FFFFFF" Offset="0.5" />
+                            <GradientStop Color="#1AFFFFFF" Offset="1.0" />
+                        </LinearGradientBrush>
+                    </TextBlock.Foreground>
+                </TextBlock>
+            </Grid>
+
+            <!-- Controls panel (Phase 3) -->
+            <StackPanel x:Name="ControlsPanel" HorizontalAlignment="Center" Opacity="0">
+                <StackPanel.RenderTransform>
+                    <TranslateTransform x:Name="ControlsTranslate" Y="12" />
+                </StackPanel.RenderTransform>
+
+                <!-- Buttons -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,20">
+                    <Button x:Name="SnoozeButton" Style="{StaticResource GlassButtonStyle}" 
+                            Click="Snooze_Click" Margin="0,0,16,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="💤" FontSize="14" Margin="0,0,6,0" />
+                            <TextBlock Text="Snooze" />
+                        </StackPanel>
+                    </Button>
+
+                    <Button x:Name="LockScreenButton" Style="{StaticResource GlassButtonStyle}" 
+                            Click="LockScreen_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🔒" FontSize="14" Margin="0,0,6,0" />
+                            <TextBlock Text="Lock Screen" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <!-- Snooze count -->
+                <TextBlock x:Name="SnoozeCountText" Text="4 snoozes available"
+                           FontFamily="{StaticResource TextFont}" FontSize="13" FontWeight="Medium"
+                           Foreground="#8CFFFFFF" HorizontalAlignment="Center" Margin="0,0,0,8" />
+
+                <!-- Escape hint -->
+                <Border Background="#0FFFFFFF" CornerRadius="6" Padding="10,5" HorizontalAlignment="Center">
+                    <TextBlock x:Name="EscHintText" Text="Press Esc twice to snooze the break"
+                               FontFamily="{StaticResource TextFont}" FontSize="12"
+                               Foreground="#66FFFFFF" />
+                </Border>
             </StackPanel>
         </StackPanel>
     </Grid>

@@ -1,9 +1,21 @@
 using System;
 using System.Collections.Generic;
 using System.Windows.Threading;
+using Microsoft.Win32;
 
 namespace PauselyWindows
 {
+    public class BreakEndedEventArgs : EventArgs
+    {
+        public bool IsSnoozed { get; }
+        public bool PlaySound { get; }
+        public BreakEndedEventArgs(bool isSnoozed, bool playSound = true)
+        {
+            IsSnoozed = isSnoozed;
+            PlaySound = playSound;
+        }
+    }
+
     public enum BreakStatus
     {
         Working,
@@ -66,14 +78,15 @@ namespace PauselyWindows
 
         private DispatcherTimer? _timer;
         private bool _isEnding = false;
+        private bool _isScreenLocked = false;
 
         public event EventHandler? StatusChanged;
         public event EventHandler? TimerTicked;
         public event EventHandler? BreakTriggered;
         public event EventHandler? BreakEnding;
-        public event EventHandler? BreakEnded;
+        public event EventHandler<BreakEndedEventArgs>? BreakEnded;
         public event EventHandler? IntermissionTriggered;
-        public event EventHandler? IntermissionEnded;
+        public event EventHandler<BreakEndedEventArgs>? IntermissionEnded;
 
         private const double REVERSE_ANIMATION_DURATION_SECONDS = 1.15;
         private const double TEST_MODE_THRESHOLD = 15;
@@ -84,6 +97,7 @@ namespace PauselyWindows
         {
             TimeRemaining = (int)WorkInterval;
             StartTimer();
+            SystemEvents.SessionSwitch += SessionSwitch;
         }
 
         public void StartTimer()
@@ -92,6 +106,11 @@ namespace PauselyWindows
             _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _timer.Tick += (s, e) => Tick();
             _timer.Start();
+        }
+
+        public void StopTimer()
+        {
+            _timer?.Stop();
         }
 
         private void Tick()
@@ -151,6 +170,12 @@ namespace PauselyWindows
                     else
                     {
                         _snoozeEndTime = null;
+                        if (newStatus == BreakStatus.InBreak)
+                        {
+                            _skippedCycleIndices.Add(currentCycleIndex);
+                            newStatus = BreakStatus.Working;
+                            newTimeRemaining = (cycleDuration - cyclePosition) + WorkInterval;
+                        }
                     }
                 }
 
@@ -194,6 +219,8 @@ namespace PauselyWindows
 
         public void TriggerBreak()
         {
+            if (_isEnding) return;
+            Logger.Info("Triggering break.");
             Status = BreakStatus.InBreak;
             _lastBreakDisplayedTime = DateTime.Now;
             if (!IsSyncedSession)
@@ -204,9 +231,10 @@ namespace PauselyWindows
             BreakTriggered?.Invoke(this, EventArgs.Empty);
         }
 
-        public void EndBreak()
+        public void EndBreak(bool wasPremature = false)
         {
             if (_isEnding) return;
+            Logger.Info("Ending break.");
             _isEnding = true;
 
             BreakEnding?.Invoke(this, EventArgs.Empty);
@@ -223,7 +251,7 @@ namespace PauselyWindows
                 }
                 SnoozesLeft = 4;
                 OnPropertyChanged();
-                BreakEnded?.Invoke(this, EventArgs.Empty);
+                BreakEnded?.Invoke(this, new BreakEndedEventArgs(isSnoozed: false, playSound: !wasPremature));
             };
             endTimer.Start();
         }
@@ -231,6 +259,7 @@ namespace PauselyWindows
         public void SnoozeBreak()
         {
             if (SnoozesLeft <= 0 || _isEnding) return;
+            Logger.Info($"Snoozing break. Snoozes remaining: {SnoozesLeft - 1}");
             SnoozesLeft -= 1;
             _isEnding = true;
 
@@ -255,13 +284,14 @@ namespace PauselyWindows
                 }
 
                 OnPropertyChanged();
-                BreakEnded?.Invoke(this, EventArgs.Empty);
+                BreakEnded?.Invoke(this, new BreakEndedEventArgs(isSnoozed: true, playSound: false));
             };
             endTimer.Start();
         }
 
         public void SkipBreak()
         {
+            Logger.Info("Skipping break.");
             if (IsSyncedSession)
             {
                 double cycleDuration = WorkInterval + BreakDuration;
@@ -269,20 +299,22 @@ namespace PauselyWindows
                 int currentCycleIndex = (int)(elapsed / cycleDuration);
                 _skippedCycleIndices.Add(currentCycleIndex);
             }
-            EndBreak();
+            EndBreak(wasPremature: true);
         }
 
         public void StartIntermission()
         {
             if (IsInIntermission) return;
+            Logger.Info("Starting intermission.");
             IsInIntermission = true;
             IntermissionTimeRemaining = (int)BreakDuration;
             OnPropertyChanged();
             IntermissionTriggered?.Invoke(this, EventArgs.Empty);
         }
 
-        public void EndIntermission()
+        public void EndIntermission(bool wasPremature = false)
         {
+            Logger.Info("Ending intermission.");
             IsInIntermission = false;
             IntermissionTimeRemaining = 0;
 
@@ -293,9 +325,38 @@ namespace PauselyWindows
             {
                 endTimer.Stop();
                 OnPropertyChanged();
-                IntermissionEnded?.Invoke(this, EventArgs.Empty);
+                IntermissionEnded?.Invoke(this, new BreakEndedEventArgs(isSnoozed: false, playSound: !wasPremature));
             };
             endTimer.Start();
+        }
+
+        private static readonly char[] Base32Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567".ToCharArray();
+
+        private string EncodeBase32(int value)
+        {
+            var result = new char[6];
+            int temp = value;
+            for (int i = 5; i >= 0; i--)
+            {
+                int index = temp & 0x1F;
+                result[i] = Base32Alphabet[index];
+                temp >>= 5;
+            }
+            return new string(result);
+        }
+
+        private int? DecodeBase32(string s)
+        {
+            if (s.Length != 6) return null;
+            int result = 0;
+            string upper = s.ToUpperInvariant();
+            for (int i = 0; i < 6; i++)
+            {
+                int index = Array.IndexOf(Base32Alphabet, upper[i]);
+                if (index < 0) return null;
+                result = (result << 5) | index;
+            }
+            return result;
         }
 
         public string GenerateSessionCode()
@@ -315,53 +376,107 @@ namespace PauselyWindows
                 IsSyncedSession = true;
             }
             
-            string payload = $"{(int)WorkInterval}:{(int)BreakDuration}:{(long)_anchorTimestamp}";
-            var plainTextBytes = System.Text.Encoding.UTF8.GetBytes(payload);
-            return Convert.ToBase64String(plainTextBytes);
+            double[] workIntervals = { 15, 600, 1200, 1800 };
+            double[] breakDurations = { 5, 15, 20, 60 };
+            
+            int wIndex = Array.IndexOf(workIntervals, WorkInterval);
+            if (wIndex < 0) wIndex = 2;
+            int bIndex = Array.IndexOf(breakDurations, BreakDuration);
+            if (bIndex < 0) bIndex = 2;
+            
+            int timestampModulo = (int)_anchorTimestamp % 4194304;
+            int combined = (wIndex << 26) | (bIndex << 22) | timestampModulo;
+            
+            return EncodeBase32(combined);
         }
 
         public void JoinSession(string code)
         {
-            try
+            Logger.Info($"Attempting to join sync session with code: {code}");
+            string cleanCode = code.Trim();
+            
+            double[] workIntervals = { 15, 600, 1200, 1800 };
+            double[] breakDurations = { 5, 15, 20, 60 };
+            
+            double w = 1200;
+            double b = 20;
+            double a = 0;
+            
+            int? combined = DecodeBase32(cleanCode);
+            if (cleanCode.Length == 6 && combined.HasValue)
             {
-                var base64EncodedBytes = Convert.FromBase64String(code);
-                var payload = System.Text.Encoding.UTF8.GetString(base64EncodedBytes);
-                var parts = payload.Split(':');
-                if (parts.Length == 3)
+                int modulo = combined.Value & 0x3FFFFF;
+                int wIndex = (combined.Value >> 26) & 0x0F;
+                int bIndex = (combined.Value >> 22) & 0x0F;
+                
+                w = (wIndex >= 0 && wIndex < workIntervals.Length) ? workIntervals[wIndex] : 1200;
+                b = (bIndex >= 0 && bIndex < breakDurations.Length) ? breakDurations[bIndex] : 20;
+                
+                int current = (int)GetCurrentUnixTime();
+                int window = 4194304;
+                int currentModulo = current % window;
+                int diff = modulo - currentModulo;
+                
+                if (diff > window / 2) diff -= window;
+                else if (diff < -window / 2) diff += window;
+                
+                a = current + diff;
+            }
+            else
+            {
+                try
                 {
-                    if (!IsSyncedSession)
+                    var base64EncodedBytes = Convert.FromBase64String(cleanCode);
+                    var payload = System.Text.Encoding.UTF8.GetString(base64EncodedBytes);
+                    var parts = payload.Split(':');
+                    if (parts.Length == 3)
                     {
-                        _previousWorkInterval = WorkInterval;
-                        _previousBreakDuration = BreakDuration;
+                        w = double.Parse(parts[0], System.Globalization.CultureInfo.InvariantCulture);
+                        b = double.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture);
+                        a = double.Parse(parts[2], System.Globalization.CultureInfo.InvariantCulture);
                     }
-
-                    _isApplyingSync = true;
-                    WorkInterval = double.Parse(parts[0]);
-                    BreakDuration = double.Parse(parts[1]);
-                    _isApplyingSync = false;
-
-                    _anchorTimestamp = double.Parse(parts[2]);
-                    IsSyncedSession = true;
-                    _skippedCycleIndices.Clear();
-                    _snoozeEndTime = null;
-                    SnoozesLeft = 4;
-
-                    // If they were in break locally but the code puts them in work, ensure overlays close
-                    if (Status == BreakStatus.InBreak)
+                    else
                     {
-                        BreakEnded?.Invoke(this, EventArgs.Empty);
+                        Logger.Warn($"Failed to join sync session: Code payload length is not 3: {payload}");
+                        return;
                     }
                 }
+                catch (Exception ex)
+                {
+                    Logger.Warn($"Failed to decode Base64 sync code: {ex.Message}");
+                    return; // Invalid code
+                }
             }
-            catch
+            
+            if (!IsSyncedSession)
             {
-                // Invalid code
+                _previousWorkInterval = WorkInterval;
+                _previousBreakDuration = BreakDuration;
+            }
+
+            _isApplyingSync = true;
+            WorkInterval = w;
+            BreakDuration = b;
+            _isApplyingSync = false;
+
+            _anchorTimestamp = a;
+            IsSyncedSession = true;
+            _skippedCycleIndices.Clear();
+            _snoozeEndTime = null;
+            SnoozesLeft = 4;
+
+            Logger.Info($"Successfully joined sync session. WorkInterval: {w}, BreakDuration: {b}, AnchorTimestamp: {a}");
+
+            if (Status == BreakStatus.InBreak)
+            {
+                BreakEnded?.Invoke(this, new BreakEndedEventArgs(isSnoozed: false, playSound: false));
             }
         }
 
         public void LeaveSession()
         {
             if (!IsSyncedSession) return;
+            Logger.Info("Leaving sync session and restoring previous intervals.");
             IsSyncedSession = false;
 
             _isApplyingSync = true;
@@ -387,6 +502,8 @@ namespace PauselyWindows
             _snoozeEndTime = null;
             SnoozesLeft = 4;
 
+            Logger.Info($"Restored intervals. WorkInterval: {WorkInterval}, BreakDuration: {BreakDuration}, TimeRemaining: {TimeRemaining}");
+
             OnPropertyChanged();
         }
 
@@ -394,6 +511,49 @@ namespace PauselyWindows
         {
             StatusChanged?.Invoke(this, EventArgs.Empty);
             TimerTicked?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void SessionSwitch(object sender, SessionSwitchEventArgs e)
+        {
+            Logger.Info($"SessionSwitch event triggered: {e.Reason}");
+            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            {
+                if (e.Reason == SessionSwitchReason.SessionLock)
+                {
+                    Logger.Info("Session locked. Pausing timer and discarding active breaks/intermissions.");
+                    _isScreenLocked = true;
+                    _timer?.Stop();
+
+                    if (Status == BreakStatus.InBreak)
+                    {
+                        _isEnding = false;
+                        Status = BreakStatus.Working;
+                        if (!IsSyncedSession)
+                        {
+                            TimeRemaining = (int)WorkInterval;
+                        }
+                        SnoozesLeft = 4;
+                        OnPropertyChanged();
+                        BreakEnded?.Invoke(this, new BreakEndedEventArgs(isSnoozed: false, playSound: false));
+                    }
+                    if (IsInIntermission)
+                    {
+                        IsInIntermission = false;
+                        IntermissionTimeRemaining = 0;
+                        OnPropertyChanged();
+                        IntermissionEnded?.Invoke(this, new BreakEndedEventArgs(isSnoozed: false, playSound: false));
+                    }
+                }
+                else if (e.Reason == SessionSwitchReason.SessionUnlock)
+                {
+                    Logger.Info("Session unlocked. Resuming timer.");
+                    if (_isScreenLocked)
+                    {
+                        _isScreenLocked = false;
+                        _timer?.Start();
+                    }
+                }
+            });
         }
     }
 }

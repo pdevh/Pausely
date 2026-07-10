@@ -11,8 +11,10 @@ struct SoundManager {
     
     /// Play a clean sound to signal the end of a break
     static func playEndSound() {
-        // macOS built-in "Tink" or "Ping" sounds indicate task completion
-        if let sound = NSSound(named: "Tink") ?? NSSound(named: "Purr") {
+        if let soundURL = Bundle.main.url(forResource: "crystal-glass", withExtension: "wav"),
+           let sound = NSSound(contentsOf: soundURL, byReference: true) {
+            sound.play()
+        } else if let sound = NSSound(named: "Glass") ?? NSSound(named: "Hero") {
             sound.play()
         }
     }

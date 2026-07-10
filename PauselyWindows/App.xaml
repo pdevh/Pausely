@@ -3,33 +3,77 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:PauselyWindows"
              xmlns:tb="http://www.hardcodet.net/taskbar"
+             xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
              Startup="Application_Startup"
              ShutdownMode="OnExplicitShutdown">
     <Application.Resources>
-         <ContextMenu x:Key="SysTrayMenu">
-            <MenuItem Header="Pausely MVP" IsEnabled="False" />
-            <MenuItem x:Name="StatusMenuItem" Header="Status" IsEnabled="False" />
-            <Separator />
-            <MenuItem Header="Start Break Now" Click="StartBreak_Click" />
-            <Separator />
-            <MenuItem Header="Copy Session Code" Click="CopySessionCode_Click" />
-            <MenuItem Header="Join Session..." Click="JoinSession_Click" />
-            <MenuItem x:Name="LeaveSessionMenuItem" Header="Leave Session" Click="LeaveSession_Click" Visibility="Collapsed" />
-            <Separator />
-            <MenuItem x:Name="WorkIntervalMenuItem" Header="Work Interval">
-                <MenuItem Header="15 seconds (Test Mode)" Tag="15" Click="WorkInterval_Click" />
-                <MenuItem Header="10 minutes" Tag="600" Click="WorkInterval_Click" />
-                <MenuItem Header="20 minutes (Standard)" Tag="1200" Click="WorkInterval_Click" IsChecked="True" />
-                <MenuItem Header="30 minutes" Tag="1800" Click="WorkInterval_Click" />
-            </MenuItem>
-            <MenuItem x:Name="BreakDurationMenuItem" Header="Break Duration">
-                <MenuItem Header="5 seconds (Test Mode)" Tag="5" Click="BreakDuration_Click" />
-                <MenuItem Header="15 seconds" Tag="15" Click="BreakDuration_Click" />
-                <MenuItem Header="20 seconds (Standard)" Tag="20" Click="BreakDuration_Click" IsChecked="True" />
-                <MenuItem Header="60 seconds" Tag="60" Click="BreakDuration_Click" />
-            </MenuItem>
-            <Separator />
-            <MenuItem Header="Quit Pausely" Click="Quit_Click" />
-         </ContextMenu>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ui:ThemesDictionary Theme="Dark" />
+                <ui:ControlsDictionary />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- ContextMenu goes here, after MergedDictionaries -->
+            <ContextMenu x:Key="SysTrayMenu">
+                <MenuItem x:Name="StatusMenuItem" IsEnabled="False">
+                    <MenuItem.HeaderTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" FontWeight="SemiBold" />
+                        </DataTemplate>
+                    </MenuItem.HeaderTemplate>
+                    <MenuItem.Icon>
+                        <ui:ProgressRing IsIndeterminate="False" Progress="0" Width="16" Height="16" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <Separator />
+                <MenuItem StaysOpenOnClick="True">
+                    <MenuItem.Header>
+                        <ui:Button x:Name="StartBreakButton" Appearance="Primary" Content="Start Break Now" Width="220" Click="StartBreak_Click" />
+                    </MenuItem.Header>
+                </MenuItem>
+                <Separator />
+                <MenuItem Header="Copy Session Code" Click="CopySessionCode_Click">
+                    <MenuItem.Icon>
+                        <ui:SymbolIcon Symbol="Copy24" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem Header="Join Session..." Click="JoinSession_Click">
+                    <MenuItem.Icon>
+                        <ui:SymbolIcon Symbol="Link24" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem x:Name="LeaveSessionMenuItem" Header="Leave Session" Click="LeaveSession_Click" Visibility="Collapsed">
+                    <MenuItem.Icon>
+                        <ui:SymbolIcon Symbol="PersonDelete24" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <Separator />
+                <MenuItem x:Name="WorkIntervalMenuItem" Header="Work Interval">
+                    <MenuItem.Icon>
+                        <ui:SymbolIcon Symbol="Clock24" />
+                    </MenuItem.Icon>
+                    <MenuItem Header="15 seconds (Test Mode)" Tag="15" Click="WorkInterval_Click" />
+                    <MenuItem Header="10 minutes" Tag="600" Click="WorkInterval_Click" />
+                    <MenuItem Header="20 minutes (Standard)" Tag="1200" Click="WorkInterval_Click" IsChecked="True" />
+                    <MenuItem Header="30 minutes" Tag="1800" Click="WorkInterval_Click" />
+                </MenuItem>
+                <MenuItem x:Name="BreakDurationMenuItem" Header="Break Duration">
+                    <MenuItem Header="5 seconds (Test Mode)" Tag="5" Click="BreakDuration_Click" />
+                    <MenuItem Header="15 seconds" Tag="15" Click="BreakDuration_Click" />
+                    <MenuItem Header="20 seconds (Standard)" Tag="20" Click="BreakDuration_Click" IsChecked="True" />
+                    <MenuItem Header="60 seconds" Tag="60" Click="BreakDuration_Click" />
+                </MenuItem>
+                <Separator />
+                <MenuItem Header="Settings">
+                    <MenuItem.Icon>
+                        <ui:SymbolIcon Symbol="Settings24" />
+                    </MenuItem.Icon>
+                    <MenuItem x:Name="AutoUpdateMenuItem" Header="Auto-Update" IsCheckable="True" Click="AutoUpdate_Click" />
+                    <MenuItem x:Name="RunOnStartupMenuItem" Header="Run on Startup" IsCheckable="True" Click="RunOnStartup_Click" />
+                    <Separator />
+                    <MenuItem Header="Quit Pausely" Click="Quit_Click" />
+                </MenuItem>
+            </ContextMenu>
+        </ResourceDictionary>
     </Application.Resources>
 </Application>
