@@ -9,12 +9,22 @@ let package = Package(
     products: [
         .executable(name: "Pausely", targets: ["Pausely"])
     ],
-    dependencies: [],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.4")
+    ],
     targets: [
         .executableTarget(
             name: "Pausely",
-            dependencies: [],
-            path: "Sources/Pausely"
+            dependencies: [
+                .product(name: "Sparkle", package: "Sparkle")
+            ],
+            path: "Sources/Pausely",
+            linkerSettings: [
+                .unsafeFlags([
+                    "-Xlinker", "-rpath",
+                    "-Xlinker", "@executable_path/../Frameworks"
+                ])
+            ]
         )
     ]
 )

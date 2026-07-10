@@ -6,15 +6,9 @@ class AppSettings {
     private let defaults = UserDefaults.standard
     
     private enum Keys {
-        static let autoUpdateEnabled = "autoUpdateEnabled"
         static let runOnStartup = "runOnStartup"
         static let workInterval = "workInterval"
         static let breakDuration = "breakDuration"
-    }
-    
-    var autoUpdateEnabled: Bool {
-        get { defaults.bool(forKey: Keys.autoUpdateEnabled) }
-        set { defaults.set(newValue, forKey: Keys.autoUpdateEnabled) }
     }
     
     var runOnStartup: Bool {
@@ -35,7 +29,6 @@ class AppSettings {
     private init() {
         // Register defaults
         defaults.register(defaults: [
-            Keys.autoUpdateEnabled: false,
             Keys.runOnStartup: false,
             Keys.workInterval: 1200.0,
             Keys.breakDuration: 20.0

@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -11,23 +16,78 @@ env:
 jobs:
   build-macos:
     runs-on: macos-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Build macOS app
+        env:
+          VERSION: 1.0.${{ github.run_number }}
         run: |
           chmod +x build.sh
-          ./build.sh 1.0.${{ github.run_number }}
+          ./build.sh "$VERSION"
 
-      - name: Zip macOS app
-        run: zip -r Pausely-macOS.zip Pausely.app
+      - name: Verify macOS bundle
+        env:
+          VERSION: 1.0.${{ github.run_number }}
+        run: |
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Pausely.app/Contents/Info.plist)" = "$VERSION"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Pausely.app/Contents/Info.plist)" = "$VERSION"
+          test "$(lipo -archs Pausely.app/Contents/MacOS/Pausely)" = "x86_64 arm64" || test "$(lipo -archs Pausely.app/Contents/MacOS/Pausely)" = "arm64 x86_64"
+          codesign --verify --deep --strict Pausely.app
+
+      - name: Package macOS app
+        run: ditto -c -k --sequesterRsrc --keepParent Pausely.app Pausely-macOS.zip
+
+      - name: Generate release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: 1.0.${{ github.run_number }}
+        run: |
+          mkdir sparkle-release
+          cp Pausely-macOS.zip sparkle-release/Pausely-macOS.zip
+          gh api --method POST "/repos/${GITHUB_REPOSITORY}/releases/generate-notes" -f tag_name="v${VERSION}" -f target_commitish="${GITHUB_SHA}" --jq .body > sparkle-release/Pausely-macOS.md
+
+      - name: Generate signed Sparkle appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          VERSION: 1.0.${{ github.run_number }}
+        run: |
+          test -n "$SPARKLE_PRIVATE_KEY"
+          printf '%s' "$SPARKLE_PRIVATE_KEY" | .build/artifacts/sparkle/Sparkle/bin/generate_appcast \
+            --ed-key-file - \
+            --download-url-prefix "https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/" \
+            --link "https://github.com/${GITHUB_REPOSITORY}/releases/tag/v${VERSION}" \
+            --embed-release-notes \
+            --maximum-versions 1 \
+            --maximum-deltas 0 \
+            -o appcast.xml \
+            sparkle-release
+          test -s appcast.xml
+
+      - name: Verify appcast contents
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          VERSION: 1.0.${{ github.run_number }}
+        run: |
+          grep -q "<sparkle:version>$VERSION</sparkle:version>" appcast.xml
+          grep -q "releases/download/v${VERSION}/Pausely-macOS.zip" appcast.xml
+          grep -q "sparkle:edSignature=" appcast.xml
+          grep -q "sparkle-signatures:" appcast.xml
+          printf '%s' "$SPARKLE_PRIVATE_KEY" | .build/artifacts/sparkle/Sparkle/bin/sign_update \
+            --verify \
+            --ed-key-file - \
+            appcast.xml
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
           name: Pausely-macOS
-          path: Pausely-macOS.zip
+          path: |
+            Pausely-macOS.zip
+            appcast.xml
 
   build-windows:
     runs-on: windows-2025
@@ -54,6 +114,7 @@ jobs:
           path: Pausely-Windows.zip
 
   create-release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     needs: [build-macos, build-windows]
     permissions:
@@ -74,7 +135,10 @@ jobs:
         with:
           tag_name: v1.0.${{ github.run_number }}
           name: Release v1.0.${{ github.run_number }}
+          make_latest: true
+          fail_on_unmatched_files: true
           files: |
             Pausely-macOS.zip
+            appcast.xml
             Pausely-Windows.zip
           generate_release_notes: true
