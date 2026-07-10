@@ -20,5 +20,15 @@
 	<true/>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://github.com/pdevh/Pausely/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>IxGalmNn+lPWCGGvwarxYKhd3gR69GYGBN4JAGVldm0=</string>
+	<key>SURequireSignedFeed</key>
+	<true/>
+	<key>SUVerifyUpdateBeforeExtraction</key>
+	<true/>
 </dict>
 </plist>

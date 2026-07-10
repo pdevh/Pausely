@@ -10,40 +10,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Startup reconciliation
         StartupService.shared.reconcile()
         
-        // Auto-update
-        NotificationCenter.default.addObserver(self, selector: #selector(updateAvailable(_:)), name: UpdateService.updateAvailableNotification, object: nil)
-        
-        if AppSettings.shared.autoUpdateEnabled {
-            UpdateService.shared.checkForUpdate()
-        }
-    }
-    
-    @objc func updateAvailable(_ notification: Notification) {
-        guard let updateInfo = notification.object as? UpdateInfo else { return }
-        
-        let alert = NSAlert()
-        alert.messageText = "Update Available"
-        alert.informativeText = "Pausely v\(updateInfo.version) is available. Update now?"
-        alert.addButton(withTitle: "Update")
-        alert.addButton(withTitle: "Later")
-        
-        // Bring app to front
-        NSApp.activate(ignoringOtherApps: true)
-        
-        if alert.runModal() == .alertFirstButtonReturn {
-            // Start the process without blocking
-            DispatchQueue.main.async {
-                UpdateService.shared.downloadAndApplyUpdate(updateInfo) { success in
-                    if !success {
-                        let errorAlert = NSAlert()
-                        errorAlert.messageText = "Update Failed"
-                        errorAlert.informativeText = "Failed to download or apply the update. Please try again later."
-                        errorAlert.addButton(withTitle: "OK")
-                        errorAlert.runModal()
-                    }
-                }
-            }
-        }
+        // Start Sparkle and perform an immediate quiet check when enabled.
+        _ = UpdateService.shared
+        UpdateService.shared.checkForUpdatesInBackground()
     }
 }
 
@@ -328,9 +297,14 @@ class MenuManager: NSObject, NSMenuDelegate {
         settingsItem.submenu = settingsMenu
         menu.addItem(settingsItem)
         
-        let autoUpdateItem = NSMenuItem(title: "Auto-Update", action: #selector(autoUpdateSelected(_:)), keyEquivalent: "")
+        let checkForUpdatesItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdatesSelected(_:)), keyEquivalent: "")
+        checkForUpdatesItem.target = self
+        checkForUpdatesItem.isEnabled = UpdateService.shared.canCheckForUpdates
+        settingsMenu.addItem(checkForUpdatesItem)
+
+        let autoUpdateItem = NSMenuItem(title: "Automatically Check for Updates", action: #selector(autoUpdateSelected(_:)), keyEquivalent: "")
         autoUpdateItem.target = self
-        autoUpdateItem.state = AppSettings.shared.autoUpdateEnabled ? .on : .off
+        autoUpdateItem.state = UpdateService.shared.automaticallyChecksForUpdates ? .on : .off
         settingsMenu.addItem(autoUpdateItem)
         
         let runOnStartupItem = NSMenuItem(title: "Run on Startup", action: #selector(runOnStartupSelected(_:)), keyEquivalent: "")
@@ -489,13 +463,17 @@ class MenuManager: NSObject, NSMenuDelegate {
     }
     
     @objc private func autoUpdateSelected(_ sender: NSMenuItem) {
-        let newValue = !AppSettings.shared.autoUpdateEnabled
-        AppSettings.shared.autoUpdateEnabled = newValue
+        let newValue = !UpdateService.shared.automaticallyChecksForUpdates
+        UpdateService.shared.automaticallyChecksForUpdates = newValue
         sender.state = newValue ? .on : .off
-        
+
         if newValue {
-            UpdateService.shared.checkForUpdate()
+            UpdateService.shared.checkForUpdatesInBackground()
         }
+    }
+
+    @objc private func checkForUpdatesSelected(_ sender: NSMenuItem) {
+        UpdateService.shared.checkForUpdates()
     }
     
     @objc private func runOnStartupSelected(_ sender: NSMenuItem) {
