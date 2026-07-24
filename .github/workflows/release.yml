@@ -378,13 +378,14 @@ jobs:
           Write-Host "Adding temporary noninteractive certificate trust"
           foreach ($storeName in @("Root", "TrustedPublisher")) {
             $storePath = "Cert:\CurrentUser\$storeName"
-            $importedTrustCertificates = @(
-              Import-Certificate `
-                -FilePath $certificatePath `
-                -CertStoreLocation $storePath
-            )
-            if ($importedTrustCertificates.Count -eq 0 -or
-                $importedTrustCertificates[0].Thumbprint -ne $expectedCertificateSha1) {
+            $certutilOutput = & certutil.exe -user -f -addstore $storeName $certificatePath
+            if ($LASTEXITCODE -ne 0) {
+              throw "certutil failed while adding certificate trust to $storePath.`n$($certutilOutput -join [Environment]::NewLine)"
+            }
+
+            $trustedCertificate = Get-Item -LiteralPath "$storePath\$expectedCertificateSha1" `
+              -ErrorAction SilentlyContinue
+            if ($null -eq $trustedCertificate) {
               throw "Failed to import the signing certificate into $storePath."
             }
           }
