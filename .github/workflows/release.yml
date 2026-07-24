@@ -6,16 +6,15 @@ on:
       - main
   workflow_dispatch:
 
-concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: true
-
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build-macos:
     runs-on: macos-latest
+    concurrency:
+      group: release-macos-${{ github.ref }}
+      cancel-in-progress: true
     permissions:
       contents: write
     steps:
@@ -196,6 +195,9 @@ jobs:
   build-windows:
     if: github.ref == 'refs/heads/main'
     runs-on: windows-2025
+    concurrency:
+      group: release-windows-${{ github.ref }}
+      cancel-in-progress: true
     permissions:
       contents: read
     env:
@@ -742,6 +744,9 @@ jobs:
   create-release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    concurrency:
+      group: release-publish-${{ github.ref }}
+      cancel-in-progress: false
     needs: [build-macos, build-windows]
     permissions:
       contents: write
