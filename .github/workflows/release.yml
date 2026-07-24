@@ -377,7 +377,7 @@ jobs:
           # The certificate is never installed on an end user's machine.
           Write-Host "Adding temporary noninteractive certificate trust"
           foreach ($storeName in @("Root", "TrustedPublisher")) {
-            & certutil.exe -user -f -addstore $storeName $certificatePath
+            & certutil.exe -user -f -Silent -addstore $storeName $certificatePath
             if ($LASTEXITCODE -ne 0) {
               throw "certutil failed to add the signing certificate to $storeName."
             }
