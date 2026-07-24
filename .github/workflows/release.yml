@@ -8,7 +8,7 @@ on:
 
 concurrency:
   group: release-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -271,6 +271,7 @@ jobs:
           }
 
       - name: Prepare persistent Windows signing identity
+        timeout-minutes: 3
         shell: pwsh
         env:
           WINDOWS_SIGNING_CERTIFICATE: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE }}
@@ -299,6 +300,7 @@ jobs:
           }
           [IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
 
+          Write-Host "Validating the pinned Windows signing identity"
           $publicCertificate =
             [Security.Cryptography.X509Certificates.X509Certificate2]::new(
               $certificatePath
@@ -350,6 +352,7 @@ jobs:
             $env:WINDOWS_SIGNING_CERTIFICATE_PASSWORD `
             -AsPlainText `
             -Force
+          Write-Host "Importing the private signing identity"
           $importedCertificates = @(
             Import-PfxCertificate `
               -FilePath $pfxPath `
@@ -370,12 +373,13 @@ jobs:
           # CI trusts only this exact leaf temporarily so SignTool, Inno signcheck,
           # installation, and uninstall verification can exercise the signed files.
           # The certificate is never installed on an end user's machine.
-          Import-Certificate `
-            -FilePath $certificatePath `
-            -CertStoreLocation Cert:\CurrentUser\Root | Out-Null
-          Import-Certificate `
-            -FilePath $certificatePath `
-            -CertStoreLocation Cert:\CurrentUser\TrustedPublisher | Out-Null
+          Write-Host "Adding temporary noninteractive certificate trust"
+          foreach ($storeName in @("Root", "TrustedPublisher")) {
+            & certutil.exe -user -f -addstore $storeName $certificatePath
+            if ($LASTEXITCODE -ne 0) {
+              throw "certutil failed to add the signing certificate to $storeName."
+            }
+          }
 
           $signTool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" |
             Sort-Object { [Version]$_.Directory.Parent.Name } -Descending |
