@@ -118,6 +118,7 @@
             <TextBlock x:Name="SubtitleText" Text="Set your eyes on something distant until the countdown is over"
                        FontFamily="{StaticResource TextFont}" FontSize="18" FontWeight="Normal"
                        Foreground="#D9FFFFFF" HorizontalAlignment="Center" Margin="0,0,0,24"
+                       MaxWidth="760" TextWrapping="Wrap" TextAlignment="Center"
                        Opacity="0">
                 <TextBlock.RenderTransform>
                     <TranslateTransform x:Name="SubtitleTranslate" Y="12" />

@@ -59,12 +59,6 @@ final class RenderedWallpaperProvider: ObservableObject {
     
 
 
-    @discardableResult
-    func requestScreenCapturePermissionIfNeeded() -> Bool {
-        guard !CGPreflightScreenCaptureAccess() else { return true }
-        return CGRequestScreenCaptureAccess()
-    }
-
     func snapshot(for displayID: CGDirectDisplayID) -> RenderedWallpaperSnapshot? {
         snapshots[displayID]
     }
@@ -251,7 +245,13 @@ private enum RenderedWallpaperCapturer {
             throw RenderedWallpaperCaptureError.unsupportedOS
         }
 
-        let content = try? await shareableContentExcludingDesktopWindows()
+        // Do not let ScreenCaptureKit become a second, implicit permission
+        // request path. The permission manager owns prompting so denied or
+        // duplicate-install states cannot produce another system dialog when
+        // the pre-break wallpaper refresh runs.
+        let content = CGPreflightScreenCaptureAccess()
+            ? try? await shareableContentExcludingDesktopWindows()
+            : nil
 
         return try await withThrowingTaskGroup(of: RenderedWallpaperSnapshot.self) { group in
             for target in targets {

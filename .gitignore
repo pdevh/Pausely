@@ -8,6 +8,9 @@
 
 # Built Application
 Pausely.app/
+Pausely-macOS.dmg
+Pausely-macOS.zip
+appcast.xml
 
 
 # Icon must end with two \r
@@ -44,6 +47,10 @@ Temporary Items
 
 /PauselyWindows/bin
 /PauselyWindows/obj
+/out/
+/installer-out/
+Pausely-Windows-Setup.exe
+Pausely-Windows.zip
 .idea
 tests/*
 .ahadiff/*
