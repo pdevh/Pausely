@@ -5,7 +5,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         MenuManager.shared.setupMenuBar()
 
-        RenderedWallpaperProvider.shared.requestScreenCapturePermissionIfNeeded()
+        ScreenCapturePermissionManager.shared.prepareAtLaunch()
         
         // Startup reconciliation
         StartupService.shared.reconcile()
@@ -249,6 +249,7 @@ class MenuManager: NSObject, NSMenuDelegate {
         } else {
             let hostSessionItem = NSMenuItem(title: "Host Session", action: #selector(hostSessionClicked), keyEquivalent: "")
             hostSessionItem.target = self
+            hostSessionItem.isEnabled = breakManager.status == .working
             hostSessionItem.image = NSImage(systemSymbolName: "person.2.badge.gearshape", accessibilityDescription: nil)
             hostSessionItem.toolTip = "Starts a session using your current Work Interval and Break Duration."
             menu.addItem(hostSessionItem)
@@ -311,6 +312,24 @@ class MenuManager: NSObject, NSMenuDelegate {
         runOnStartupItem.target = self
         runOnStartupItem.state = AppSettings.shared.runOnStartup ? .on : .off
         settingsMenu.addItem(runOnStartupItem)
+
+        let permissionManager = ScreenCapturePermissionManager.shared
+        let hasDuplicateInstalls = permissionManager.knownInstallLocations.count > 1
+        let permissionTitle: String
+        if hasDuplicateInstalls {
+            permissionTitle = "Screen Recording: Duplicate Apps Found…"
+        } else if permissionManager.isAuthorized {
+            permissionTitle = "Screen Recording: Allowed"
+        } else {
+            permissionTitle = "Screen Recording: Needs Attention…"
+        }
+        let screenRecordingItem = NSMenuItem(title: permissionTitle, action: #selector(screenRecordingPermissionSelected(_:)), keyEquivalent: "")
+        screenRecordingItem.target = self
+        screenRecordingItem.image = NSImage(
+            systemSymbolName: permissionManager.isAuthorized && !hasDuplicateInstalls ? "checkmark.shield" : "exclamationmark.shield",
+            accessibilityDescription: nil
+        )
+        settingsMenu.addItem(screenRecordingItem)
         
         settingsMenu.addItem(NSMenuItem.separator())
         
@@ -482,6 +501,13 @@ class MenuManager: NSObject, NSMenuDelegate {
         sender.state = newValue ? .on : .off
         
         StartupService.shared.reconcile()
+    }
+
+    @objc private func screenRecordingPermissionSelected(_ sender: NSMenuItem) {
+        DispatchQueue.main.async { [weak self] in
+            ScreenCapturePermissionManager.shared.showPermissionHelp()
+            self?.buildMenu()
+        }
     }
     
     @objc private func quitClicked() {

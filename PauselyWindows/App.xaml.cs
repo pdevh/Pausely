@@ -16,10 +16,24 @@ namespace PauselyWindows
         private TaskbarIcon _taskbarIcon;
         private BreakManager _breakManager;
         private List<OverlayWindow> _overlayWindows = new List<OverlayWindow>();
+        private CursorWarningWindow _cursorWarningWindow;
+        private bool _isShuttingDown;
+        private bool _updateInstallInProgress;
+        private RoutedEventHandler _updateBalloonClickHandler;
 
         private void Application_Startup(object sender, StartupEventArgs e)
         {
             Logger.Info("Pausely Windows application starting up...");
+
+            if (e.Args.Length == 2 &&
+                e.Args[0].Equals(
+                    "--verify-update-signature",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                bool verified = UpdateService.VerifyReleaseInstallerSignature(e.Args[1]);
+                Shutdown(verified ? 0 : 1);
+                return;
+            }
 
             DispatcherUnhandledException += (s, args) =>
             {
@@ -38,7 +52,7 @@ namespace PauselyWindows
             _taskbarIcon = new TaskbarIcon
             {
                 Icon = LoadApplicationIcon(),
-                ToolTipText = "Pausely MVP",
+                ToolTipText = "Pausely",
                 ContextMenu = (System.Windows.Controls.ContextMenu)FindResource("SysTrayMenu")
             };
             _taskbarIcon.TrayLeftMouseUp += (s, args) =>
@@ -50,6 +64,7 @@ namespace PauselyWindows
             };
 
             _breakManager = BreakManager.Shared;
+            _cursorWarningWindow = new CursorWarningWindow();
             _breakManager.WorkInterval = AppSettings.Shared.WorkInterval;
             _breakManager.BreakDuration = AppSettings.Shared.BreakDuration;
             _breakManager.StatusChanged += BreakManager_StatusChanged;
@@ -68,6 +83,7 @@ namespace PauselyWindows
             
             var runOnStartupItem = (System.Windows.Controls.MenuItem)FindElementByName(contextMenu, "RunOnStartupMenuItem");
             if (runOnStartupItem != null) runOnStartupItem.IsChecked = AppSettings.Shared.RunOnStartup;
+            UpdateIntervalCheckmarks();
 
             // Startup features
             StartupService.Shared.Reconcile(AppSettings.Shared);
@@ -115,6 +131,8 @@ namespace PauselyWindows
         {
             Dispatcher.Invoke(() =>
             {
+                UpdateCursorWarning();
+                UpdateIntervalCheckmarks();
                 var contextMenu = _taskbarIcon.ContextMenu;
                 if (contextMenu == null) return;
                 
@@ -127,6 +145,12 @@ namespace PauselyWindows
                         statusItem.Header = "Break in progress";
                         _taskbarIcon.ToolTipText = "Break in progress";
                     }
+                    else if (_breakManager.Status == BreakStatus.Paused)
+                    {
+                        string timeFormatted = $"{_breakManager.TimeRemaining / 60:D2}:{_breakManager.TimeRemaining % 60:D2}";
+                        statusItem.Header = $"Breaks paused · {timeFormatted} left";
+                        _taskbarIcon.ToolTipText = $"Breaks paused · {timeFormatted} left";
+                    }
                     else
                     {
                         string timeFormatted = $"{_breakManager.TimeRemaining / 60:D2}:{_breakManager.TimeRemaining % 60:D2}";
@@ -136,7 +160,9 @@ namespace PauselyWindows
 
                     if (statusItem.Icon is Wpf.Ui.Controls.ProgressRing progressRing)
                     {
-                        double progress = 1.0 - ((double)_breakManager.TimeRemaining / _breakManager.WorkInterval);
+                        double progress = _breakManager.Status == BreakStatus.Working
+                            ? 1.0 - ((double)_breakManager.TimeRemaining / _breakManager.WorkInterval)
+                            : 0.0;
                         progressRing.Progress = Math.Max(0.0, Math.Min(100.0, progress * 100));
                     }
                 }
@@ -156,6 +182,25 @@ namespace PauselyWindows
                         {
                             menuItem.Visibility = _breakManager.IsSyncedSession ? Visibility.Visible : Visibility.Collapsed;
                         }
+                        else if (menuItem.Name == "HostSessionMenuItem")
+                        {
+                            menuItem.Visibility = _breakManager.IsSyncedSession ? Visibility.Collapsed : Visibility.Visible;
+                            menuItem.IsEnabled = _breakManager.Status == BreakStatus.Working;
+                        }
+                        else if (menuItem.Name == "CopySessionCodeMenuItem")
+                        {
+                            menuItem.Visibility = _breakManager.IsSyncedSession ? Visibility.Visible : Visibility.Collapsed;
+                        }
+                        else if (menuItem.Name == "PauseBreaksMenuItem")
+                        {
+                            menuItem.Visibility = _breakManager.Status == BreakStatus.Paused ? Visibility.Collapsed : Visibility.Visible;
+                            menuItem.IsEnabled = !_breakManager.IsSyncedSession && _breakManager.Status == BreakStatus.Working;
+                            menuItem.Header = $"Pause Breaks ({FormatFriendlyDuration(_breakManager.SuggestedPauseDuration)})";
+                        }
+                        else if (menuItem.Name == "ResumeBreaksMenuItem")
+                        {
+                            menuItem.Visibility = _breakManager.Status == BreakStatus.Paused ? Visibility.Visible : Visibility.Collapsed;
+                        }
                         else if (menuItem.Name == "WorkIntervalMenuItem" || menuItem.Name == "BreakDurationMenuItem")
                         {
                             menuItem.IsEnabled = !_breakManager.IsSyncedSession;
@@ -165,10 +210,53 @@ namespace PauselyWindows
             });
         }
 
+        private void UpdateCursorWarning()
+        {
+            if (_breakManager.Status == BreakStatus.Working &&
+                !_breakManager.IsScreenLocked &&
+                _breakManager.TimeRemaining > 0 && _breakManager.TimeRemaining <= 10)
+            {
+                _cursorWarningWindow.ShowCountdown(_breakManager.TimeRemaining);
+            }
+            else if (_breakManager.IsScreenLocked ||
+                     _breakManager.Status != BreakStatus.Working ||
+                     _breakManager.TimeRemaining > 10)
+            {
+                _cursorWarningWindow.HideCountdown();
+            }
+        }
+
+        private static string FormatFriendlyDuration(double seconds)
+        {
+            if (seconds >= 3600 && seconds % 3600 == 0) return $"{seconds / 3600:0}h";
+            if (seconds >= 60 && seconds % 60 == 0) return $"{seconds / 60:0}m";
+            return $"{seconds:0}s";
+        }
+
+        private void UpdateIntervalCheckmarks()
+        {
+            SetTaggedMenuCheckmarks((System.Windows.Controls.MenuItem)FindElementByName(_taskbarIcon.ContextMenu, "WorkIntervalMenuItem"), _breakManager.WorkInterval);
+            SetTaggedMenuCheckmarks((System.Windows.Controls.MenuItem)FindElementByName(_taskbarIcon.ContextMenu, "BreakDurationMenuItem"), _breakManager.BreakDuration);
+        }
+
+        private static void SetTaggedMenuCheckmarks(System.Windows.Controls.MenuItem parent, double selectedValue)
+        {
+            if (parent == null) return;
+            foreach (object item in parent.Items)
+            {
+                if (item is System.Windows.Controls.MenuItem menuItem &&
+                    double.TryParse(menuItem.Tag?.ToString(), out double value))
+                {
+                    menuItem.IsChecked = Math.Abs(value - selectedValue) < 0.001;
+                }
+            }
+        }
+
         private void BreakManager_BreakTriggered(object sender, EventArgs e)
         {
             Dispatcher.Invoke(() =>
             {
+                _cursorWarningWindow.HideCountdown();
                 // Capture current wallpaper before showing overlay
                 WallpaperCaptureService.Shared.Refresh();
 
@@ -228,6 +316,16 @@ namespace PauselyWindows
             {
                 _breakManager.TriggerBreak();
             }
+        }
+
+        private void PauseBreaks_Click(object sender, RoutedEventArgs e)
+        {
+            _breakManager.PauseBreaks();
+        }
+
+        private void ResumeBreaks_Click(object sender, RoutedEventArgs e)
+        {
+            _breakManager.ResumeBreaks();
         }
 
         private void LeaveSession_Click(object sender, RoutedEventArgs e)
@@ -334,6 +432,16 @@ namespace PauselyWindows
             }
         }
 
+        private void HostSession_Click(object sender, RoutedEventArgs e)
+        {
+            CopySessionCode_Click(sender, e);
+            UpdateStatusMenu();
+            _taskbarIcon.ShowBalloonTip(
+                "Session ready",
+                "The invite code was copied to your clipboard.",
+                BalloonIcon.Info);
+        }
+
         private void JoinSession_Click(object sender, RoutedEventArgs e)
         {
             var window = new JoinSessionWindow();
@@ -349,6 +457,25 @@ namespace PauselyWindows
             }
         }
 
+        private async void CheckForUpdates_Click(object sender, RoutedEventArgs e)
+        {
+            bool? updateAvailable = await UpdateService.Shared.CheckForUpdateAsync(delayAtStartup: false);
+            if (updateAvailable == false)
+            {
+                _taskbarIcon.ShowBalloonTip(
+                    "Pausely is up to date",
+                    $"You’re running the latest version ({UpdateService.GetCurrentVersion()}).",
+                    BalloonIcon.Info);
+            }
+            else if (updateAvailable == null)
+            {
+                _taskbarIcon.ShowBalloonTip(
+                    "Couldn’t check for updates",
+                    "Check your internet connection and try again.",
+                    BalloonIcon.Warning);
+            }
+        }
+
         private void RunOnStartup_Click(object sender, RoutedEventArgs e)
         {
             if (sender is System.Windows.Controls.MenuItem menuItem)
@@ -361,54 +488,102 @@ namespace PauselyWindows
 
         private void UpdateService_UpdateAvailable(UpdateInfo info)
         {
-            Logger.Info($"Update check completed: New version v{info.Version} is available.");
+            string updateDescription = info.IsInstallerMigration
+                ? "Finish installing Pausely to receive signed, reliable updates."
+                : $"Pausely v{info.Version} is available. Click to install.";
+            Logger.Info(
+                info.IsInstallerMigration
+                    ? "The portable installation can be migrated to the signed installer."
+                    : $"Update check completed: New version v{info.Version} is available.");
             Dispatcher.Invoke(() =>
             {
-                _taskbarIcon.ShowBalloonTip(
-                    "Update Available", 
-                    $"Pausely v{info.Version} is available. Click to install.", 
-                    BalloonIcon.Info);
-
-                _taskbarIcon.TrayBalloonTipClicked -= OnTrayBalloonTipClicked; // Prevent multiple handlers
-                _taskbarIcon.TrayBalloonTipClicked += OnTrayBalloonTipClicked;
-
-                async void OnTrayBalloonTipClicked(object s, RoutedEventArgs e)
+                if (_updateBalloonClickHandler != null)
                 {
+                    _taskbarIcon.TrayBalloonTipClicked -= _updateBalloonClickHandler;
+                }
+
+                RoutedEventHandler clickHandler = null;
+                clickHandler = async (s, e) =>
+                {
+                    _taskbarIcon.TrayBalloonTipClicked -= clickHandler;
+                    if (ReferenceEquals(_updateBalloonClickHandler, clickHandler))
+                    {
+                        _updateBalloonClickHandler = null;
+                    }
+
+                    if (_updateInstallInProgress)
+                    {
+                        Logger.Info("Ignored a duplicate update balloon click while installation is already starting.");
+                        return;
+                    }
+
+                    _updateInstallInProgress = true;
                     try
                     {
                         Logger.Info($"User clicked update balloon tip for v{info.Version}. Initiating download...");
-                        _taskbarIcon.TrayBalloonTipClicked -= OnTrayBalloonTipClicked;
                         bool success = await UpdateService.Shared.DownloadAndApplyUpdateAsync(info);
                         if (success)
                         {
-                            Logger.Info("Update applied successfully. Shutting down application for restart...");
-                            _taskbarIcon?.Dispose();
-                            Current.Shutdown();
+                            Logger.Info("Verified installer started. Windows Installer will close and relaunch Pausely.");
                         }
                         else
                         {
                             Logger.Error("Failed to apply update.");
+                            _taskbarIcon.ShowBalloonTip(
+                                "Update not installed",
+                                "Pausely kept running because the installer could not be verified or started.",
+                                BalloonIcon.Warning);
                         }
                     }
                     catch (Exception ex)
                     {
                         Logger.Error("Exception occurred while handling update balloon tip click", ex);
                     }
-                }
+                    finally
+                    {
+                        _updateInstallInProgress = false;
+                    }
+                };
+                _updateBalloonClickHandler = clickHandler;
+                _taskbarIcon.TrayBalloonTipClicked += clickHandler;
+
+                _taskbarIcon.ShowBalloonTip(
+                    info.IsInstallerMigration ? "Finish installing Pausely" : "Update Available",
+                    updateDescription,
+                    BalloonIcon.Info);
             });
         }
 
         private void Quit_Click(object sender, RoutedEventArgs e)
         {
-            Logger.Info("Pausely Windows application shutting down via Tray Quit click...");
-            _breakManager.StopTimer();
-            foreach (var window in _overlayWindows)
+            ShutdownApplication("tray Quit selected");
+        }
+
+        private void ShutdownApplication(string reason)
+        {
+            if (_isShuttingDown)
             {
-                window.Close();
+                return;
             }
-            _overlayWindows.Clear();
-            _taskbarIcon?.Dispose();
-            Current.Shutdown();
+
+            _isShuttingDown = true;
+            Logger.Info($"Pausely Windows application shutting down: {reason}.");
+
+            try
+            {
+                _breakManager?.StopTimer();
+                _cursorWarningWindow?.Close();
+                foreach (var window in _overlayWindows)
+                {
+                    window.Close();
+                }
+                _overlayWindows.Clear();
+                _taskbarIcon?.Dispose();
+            }
+            finally
+            {
+                Current.Shutdown();
+            }
         }
 
         private static System.Drawing.Icon LoadApplicationIcon()

@@ -55,6 +55,7 @@ namespace PauselyWindows
             UpdateTimerText();
             UpdateSnoozeCount();
             SetupIntermissionUI();
+            SetupPromptUI();
             SetupClockTimer();
         }
 
@@ -257,6 +258,21 @@ namespace PauselyWindows
                 // Update hint and hide snooze count
                 SnoozeCountText.Visibility = Visibility.Collapsed;
                 EscHintText.Text = "Press Esc twice to end early";
+            }
+        }
+
+        private void SetupPromptUI()
+        {
+            if (_isIntermission)
+            {
+                SubtitleText.Text = _breakManager.CurrentIntermissionPrompt ?? "Take a moment to rest your eyes";
+                return;
+            }
+
+            if (_breakManager.CurrentBreakPrompt is BreakPrompt prompt)
+            {
+                TitleText.Text = prompt.Title;
+                SubtitleText.Text = prompt.Message;
             }
         }
 

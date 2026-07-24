@@ -33,9 +33,9 @@ namespace PauselyWindows.Services
             try
             {
                 Logger.Info("Registering application for Windows startup...");
-                using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: true);
+                using var key = Registry.CurrentUser.CreateSubKey(RunKeyPath, writable: true);
                 string exePath = GetExePath();
-                key?.SetValue(AppName, $"\"{exePath}\"");
+                key.SetValue(AppName, $"\"{exePath}\"");
                 Logger.Info($"Registered startup entry. Path: {exePath}");
             }
             catch (Exception ex)
@@ -72,9 +72,23 @@ namespace PauselyWindows.Services
             try
             {
                 using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath);
-                bool isReg = key?.GetValue(AppName) != null;
-                Logger.Info($"Checked startup registry status: {(isReg ? "Registered" : "Not Registered")}");
-                return isReg;
+                string? registeredCommand = key?.GetValue(AppName) as string;
+                if (string.IsNullOrWhiteSpace(registeredCommand))
+                {
+                    Logger.Info("Checked startup registry status: Not Registered");
+                    return false;
+                }
+
+                string expectedCommand = $"\"{GetExePath()}\"";
+                bool matchesCurrentExecutable = string.Equals(
+                    registeredCommand.Trim(),
+                    expectedCommand,
+                    StringComparison.OrdinalIgnoreCase);
+                Logger.Info(
+                    matchesCurrentExecutable
+                        ? "Checked startup registry status: Registered to the current executable"
+                        : $"Startup registry path is stale. Registered: {registeredCommand}; expected: {expectedCommand}");
+                return matchesCurrentExecutable;
             }
             catch (Exception ex)
             {
@@ -97,9 +111,9 @@ namespace PauselyWindows.Services
                 // Setting says enabled, but registry entry is missing — re-register
                 Register();
             }
-            else if (!settings.RunOnStartup && osRegistered)
+            else if (!settings.RunOnStartup)
             {
-                // Setting says disabled, but registry entry exists — deregister
+                // Remove both current and stale registrations when the setting is disabled.
                 Deregister();
             }
         }

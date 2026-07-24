@@ -9,15 +9,21 @@ struct CursorWarningView: View {
     @ObservedObject var viewModel: CursorWarningViewModel
     @State private var rotation: Double = 0
     @State private var hourglassRotation: Double = 0
+
+    // Pausely's app icon uses blue and yellow. Keeping the warning in the
+    // same palette makes it feel like part of the product instead of a red
+    // system-error alert.
+    private let brandBlue = Color(red: 63 / 255, green: 155 / 255, blue: 1)
+    private let brandYellow = Color(red: 1, green: 214 / 255, blue: 0)
     
     var body: some View {
         HStack(spacing: 10) {
-            // Animated, glowing orb with a vivid sunset gradient
+            // Animated, glowing orb using the Pausely brand palette.
             ZStack {
                 Circle()
                     .fill(
                         AngularGradient(
-                            gradient: Gradient(colors: [Color.pink, Color.orange, Color.yellow, Color.pink]),
+                            gradient: Gradient(colors: [brandBlue, brandYellow, brandBlue]),
                             center: .center,
                             startAngle: .degrees(rotation),
                             endAngle: .degrees(rotation + 360)
@@ -49,7 +55,7 @@ struct CursorWarningView: View {
                 Capsule()
                     .stroke(
                         LinearGradient(
-                            gradient: Gradient(colors: [Color.pink.opacity(0.6), Color.orange.opacity(0.6)]),
+                            gradient: Gradient(colors: [brandBlue.opacity(0.7), brandYellow.opacity(0.65)]),
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
@@ -58,7 +64,7 @@ struct CursorWarningView: View {
             }
         )
         // Soft drop shadow in colors
-        .shadow(color: Color.pink.opacity(0.2), radius: 10, x: 0, y: 6)
+        .shadow(color: brandBlue.opacity(0.22), radius: 10, x: 0, y: 6)
         .fixedSize() // Prevents the capsule from stretching to fill the NSWindow
         .opacity(viewModel.isVisible ? 1.0 : 0.0)
         .scaleEffect(viewModel.isVisible ? 1.0 : 0.85)

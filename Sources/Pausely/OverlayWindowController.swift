@@ -115,7 +115,7 @@ class OverlayWindowController {
                         if breakManager.isInIntermission {
                             breakManager.endIntermission(wasPremature: true)
                         } else {
-                            breakManager.skipBreak()
+                            breakManager.snoozeBreak()
                         }
                     }
                     self?.lastEscapePressTime = nil

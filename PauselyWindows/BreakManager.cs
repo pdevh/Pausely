@@ -19,7 +19,8 @@ namespace PauselyWindows
     public enum BreakStatus
     {
         Working,
-        InBreak
+        InBreak,
+        Paused
     }
 
     public class BreakManager
@@ -29,6 +30,8 @@ namespace PauselyWindows
         public BreakStatus Status { get; private set; } = BreakStatus.Working;
         public int TimeRemaining { get; private set; } = 1200; // 20 minutes
         public int SnoozesLeft { get; private set; } = 4;
+        public BreakPrompt? CurrentBreakPrompt { get; private set; }
+        public string? CurrentIntermissionPrompt { get; private set; }
 
         public bool IsSyncedSession { get; private set; } = false;
         public bool IsInIntermission { get; private set; } = false;
@@ -79,6 +82,7 @@ namespace PauselyWindows
         private DispatcherTimer? _timer;
         private bool _isEnding = false;
         private bool _isScreenLocked = false;
+        public bool IsScreenLocked => _isScreenLocked;
 
         public event EventHandler? StatusChanged;
         public event EventHandler? TimerTicked;
@@ -198,7 +202,19 @@ namespace PauselyWindows
             }
             else
             {
-                if (TimeRemaining > 0)
+                if (Status == BreakStatus.Paused)
+                {
+                    if (TimeRemaining > 0)
+                    {
+                        TimeRemaining -= 1;
+                        TimerTicked?.Invoke(this, EventArgs.Empty);
+                    }
+                    else
+                    {
+                        ResumeBreaks();
+                    }
+                }
+                else if (TimeRemaining > 0)
                 {
                     TimeRemaining -= 1;
                     TimerTicked?.Invoke(this, EventArgs.Empty);
@@ -223,6 +239,9 @@ namespace PauselyWindows
             Logger.Info("Triggering break.");
             Status = BreakStatus.InBreak;
             _lastBreakDisplayedTime = DateTime.Now;
+            CurrentBreakPrompt = BreakDuration >= 60
+                ? BreakPrompts.RandomBreak()
+                : new BreakPrompt("Take a breather", BreakPrompts.RandomMicrobreak());
             if (!IsSyncedSession)
             {
                 TimeRemaining = (int)BreakDuration;
@@ -302,12 +321,40 @@ namespace PauselyWindows
             EndBreak(wasPremature: true);
         }
 
+        public double SuggestedPauseDuration
+        {
+            get
+            {
+                double raw = 2 * (WorkInterval + BreakDuration);
+                const double fifteenMinutes = 900;
+                double rounded = Math.Round(raw / fifteenMinutes) * fifteenMinutes;
+                return rounded > 0 ? rounded : raw;
+            }
+        }
+
+        public void PauseBreaks()
+        {
+            if (IsSyncedSession || Status != BreakStatus.Working) return;
+            Status = BreakStatus.Paused;
+            TimeRemaining = (int)SuggestedPauseDuration;
+            OnPropertyChanged();
+        }
+
+        public void ResumeBreaks()
+        {
+            if (Status != BreakStatus.Paused) return;
+            Status = BreakStatus.Working;
+            TimeRemaining = (int)WorkInterval;
+            OnPropertyChanged();
+        }
+
         public void StartIntermission()
         {
             if (IsInIntermission) return;
             Logger.Info("Starting intermission.");
             IsInIntermission = true;
             IntermissionTimeRemaining = (int)BreakDuration;
+            CurrentIntermissionPrompt = BreakPrompts.RandomMicrobreak();
             OnPropertyChanged();
             IntermissionTriggered?.Invoke(this, EventArgs.Empty);
         }
@@ -471,6 +518,7 @@ namespace PauselyWindows
             {
                 BreakEnded?.Invoke(this, new BreakEndedEventArgs(isSnoozed: false, playSound: false));
             }
+            OnPropertyChanged();
         }
 
         public void LeaveSession()
@@ -523,6 +571,7 @@ namespace PauselyWindows
                     Logger.Info("Session locked. Pausing timer and discarding active breaks/intermissions.");
                     _isScreenLocked = true;
                     _timer?.Stop();
+                    OnPropertyChanged();
 
                     if (Status == BreakStatus.InBreak)
                     {
@@ -535,6 +584,12 @@ namespace PauselyWindows
                         SnoozesLeft = 4;
                         OnPropertyChanged();
                         BreakEnded?.Invoke(this, new BreakEndedEventArgs(isSnoozed: false, playSound: false));
+                    }
+                    if (Status == BreakStatus.Paused)
+                    {
+                        Status = BreakStatus.Working;
+                        TimeRemaining = (int)WorkInterval;
+                        OnPropertyChanged();
                     }
                     if (IsInIntermission)
                     {

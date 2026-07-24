@@ -6,6 +6,8 @@
 	<string>Pausely.icns</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.philipp.Pausely</string>
+	<key>CFBundleExecutable</key>
+	<string>Pausely</string>
 	<key>CFBundleName</key>
 	<string>Pausely</string>
 	<key>CFBundlePackageType</key>

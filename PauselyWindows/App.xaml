@@ -32,7 +32,23 @@
                     </MenuItem.Header>
                 </MenuItem>
                 <Separator />
-                <MenuItem Header="Copy Session Code" Click="CopySessionCode_Click">
+                <MenuItem x:Name="PauseBreaksMenuItem" Header="Pause Breaks" Click="PauseBreaks_Click">
+                    <MenuItem.Icon>
+                        <ui:SymbolIcon Symbol="Pause24" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem x:Name="ResumeBreaksMenuItem" Header="Resume Breaks" Click="ResumeBreaks_Click" Visibility="Collapsed">
+                    <MenuItem.Icon>
+                        <ui:SymbolIcon Symbol="Play24" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <Separator />
+                <MenuItem x:Name="HostSessionMenuItem" Header="Host Session (copy invite code)" Click="HostSession_Click">
+                    <MenuItem.Icon>
+                        <ui:SymbolIcon Symbol="Link24" />
+                    </MenuItem.Icon>
+                </MenuItem>
+                <MenuItem x:Name="CopySessionCodeMenuItem" Header="Copy Invite Code" Click="CopySessionCode_Click" Visibility="Collapsed">
                     <MenuItem.Icon>
                         <ui:SymbolIcon Symbol="Copy24" />
                     </MenuItem.Icon>
@@ -69,6 +85,7 @@
                         <ui:SymbolIcon Symbol="Settings24" />
                     </MenuItem.Icon>
                     <MenuItem x:Name="AutoUpdateMenuItem" Header="Auto-Update" IsCheckable="True" Click="AutoUpdate_Click" />
+                    <MenuItem Header="Check for Updates…" Click="CheckForUpdates_Click" />
                     <MenuItem x:Name="RunOnStartupMenuItem" Header="Run on Startup" IsCheckable="True" Click="RunOnStartup_Click" />
                     <Separator />
                     <MenuItem Header="Quit Pausely" Click="Quit_Click" />
