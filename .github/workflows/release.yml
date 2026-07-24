@@ -23,6 +23,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Import persistent self-signed certificate
+        timeout-minutes: 2
         env:
           MACOS_SIGNING_CERTIFICATE: ${{ secrets.MACOS_SIGNING_CERTIFICATE }}
           MACOS_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_SIGNING_CERTIFICATE_PASSWORD }}
@@ -36,17 +37,26 @@ jobs:
           PUBLIC_CERTIFICATE=".github/signing/Pausely-Release-Certificate.pem"
 
           printf '%s' "$MACOS_SIGNING_CERTIFICATE" | base64 -D > "$CERTIFICATE_PATH"
+          echo "Creating isolated signing keychain"
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          echo "Importing persistent signing identity"
           security import "$CERTIFICATE_PATH" -P "$MACOS_SIGNING_CERTIFICATE_PASSWORD" -f pkcs12 -k "$KEYCHAIN_PATH" -A
-          security add-trusted-cert -r trustRoot -p codeSign -k "$KEYCHAIN_PATH" "$PUBLIC_CERTIFICATE"
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          echo "Applying temporary noninteractive admin trust"
+          sudo -n security add-trusted-cert \
+            -d \
+            -r trustRoot \
+            -p codeSign \
+            -k /Library/Keychains/System.keychain \
+            "$PUBLIC_CERTIFICATE"
           security list-keychains -d user -s "$KEYCHAIN_PATH"
 
           CERTIFICATE_SHA1="$(openssl x509 -in "$PUBLIC_CERTIFICATE" -noout -fingerprint -sha1 | cut -d= -f2 | tr -d ':')"
           SIGNING_IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | awk '/Pausely GitHub Release Signing/{print $2; exit}')"
           test -n "$SIGNING_IDENTITY"
+          test "$SIGNING_IDENTITY" = "$CERTIFICATE_SHA1"
           test "$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -c 'Pausely GitHub Release Signing')" -eq 1
 
           echo "CODE_SIGN_IDENTITY=$SIGNING_IDENTITY" >> "$GITHUB_ENV"
@@ -178,7 +188,8 @@ jobs:
       - name: Remove temporary signing material
         if: always()
         run: |
-          security remove-trusted-cert .github/signing/Pausely-Release-Certificate.pem 2>/dev/null || true
+          # Hosted runners are destroyed after the job. Avoid the known-hanging
+          # remove-trusted-cert API; this workflow must not run unchanged self-hosted.
           security delete-keychain "$RUNNER_TEMP/pausely-signing.keychain-db" 2>/dev/null || true
           rm -f "$RUNNER_TEMP/pausely-release-signing.p12"
 
@@ -289,7 +300,7 @@ jobs:
           [IO.File]::WriteAllBytes($pfxPath, $pfxBytes)
 
           $publicCertificate =
-            [Security.Cryptography.X509Certificates.X509Certificate2]::CreateFromPemFile(
+            [Security.Cryptography.X509Certificates.X509Certificate2]::new(
               $certificatePath
             )
           $publicCertificateSha256 = [Convert]::ToHexString(
