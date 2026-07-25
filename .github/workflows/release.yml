@@ -487,11 +487,15 @@ jobs:
         shell: pwsh
         run: |
           $setupPath = "installer-out/Pausely-Windows-Setup.exe"
+
+          Write-Host "==> [1/12] Verifying setup installer signature..."
           ./scripts/Verify-WindowsSignature.ps1 `
             -FilePath $setupPath `
             -ExpectedSha256 $env:PAUSELY_WINDOWS_CERTIFICATE_SHA256
 
           $smokeDirectory = Join-Path $env:RUNNER_TEMP "PauselySmoke"
+
+          Write-Host "==> [2/12] Running initial silent installation..."
           $installProcess = Start-Process `
             -FilePath (Resolve-Path $setupPath).Path `
             -ArgumentList @(
@@ -512,6 +516,7 @@ jobs:
           $installedApp = Join-Path $smokeDirectory "PauselyWindows.exe"
           $uninstaller = Join-Path $smokeDirectory "unins000.exe"
 
+          Write-Host "==> [3/12] Verifying signatures of installed app and uninstaller..."
           ./scripts/Verify-WindowsSignature.ps1 `
             -FilePath $installedApp `
             -ExpectedSha256 $env:PAUSELY_WINDOWS_CERTIFICATE_SHA256
@@ -525,6 +530,7 @@ jobs:
             throw "Installed version '$installedVersion' does not match '$env:VERSION'."
           }
 
+          Write-Host "==> [4/12] Launching installed application..."
           $initialAppProcess = Start-Process `
             -FilePath $installedApp `
             -WorkingDirectory $smokeDirectory `
@@ -536,6 +542,7 @@ jobs:
             throw "The installed application exited during its launch smoke test."
           }
 
+          Write-Host "==> [5/12] Testing automatic-update reinstall..."
           $autoUpdateProcess = Start-Process `
             -FilePath (Resolve-Path $setupPath).Path `
             -ArgumentList @(
@@ -555,6 +562,7 @@ jobs:
             throw "Automatic-update reinstall failed with exit code $($autoUpdateProcess.ExitCode)."
           }
 
+          Write-Host "==> [6/12] Waiting for automatic update to relaunch application..."
           $relaunchedApp = $null
           for ($attempt = 0; $attempt -lt 15 -and $null -eq $relaunchedApp; $attempt++) {
             Start-Sleep -Seconds 1
@@ -579,9 +587,11 @@ jobs:
             throw "Automatic update relaunched the application without closing the original process."
           }
 
+          Write-Host "==> Stopping relaunched application..."
           Stop-Process -Id $relaunchedApp.Id -Force
           Wait-Process -Id $relaunchedApp.Id -ErrorAction SilentlyContinue
 
+          Write-Host "==> [7/12] Setting up portable bridge smoke test..."
           $portableDirectory = Join-Path $env:RUNNER_TEMP "Pausely Portable Smoke"
           New-Item -ItemType Directory -Path $portableDirectory -Force | Out-Null
           $portableApp = Join-Path $portableDirectory "PauselyWindows.exe"
@@ -598,6 +608,7 @@ jobs:
             throw "The portable bridge application exited during its launch smoke test."
           }
 
+          Write-Host "==> [8/12] Testing portable-to-installer migration..."
           $migrationProcess = Start-Process `
             -FilePath (Resolve-Path $setupPath).Path `
             -ArgumentList @(
@@ -617,6 +628,7 @@ jobs:
             throw "Portable-to-installer migration failed with exit code $($migrationProcess.ExitCode)."
           }
 
+          Write-Host "==> [9/12] Verifying migrated application process..."
           $migratedApp = $null
           for ($attempt = 0; $attempt -lt 15 -and $null -eq $migratedApp; $attempt++) {
             Start-Sleep -Seconds 1
@@ -649,9 +661,11 @@ jobs:
             throw "Portable migration did not leave exactly one installer-managed Pausely process."
           }
 
+          Write-Host "==> Stopping migrated application..."
           Stop-Process -Id $migratedApp.Id -Force
           Wait-Process -Id $migratedApp.Id -ErrorAction SilentlyContinue
 
+          Write-Host "==> [10/12] Testing silent uninstallation..."
           $uninstallProcess = Start-Process `
             -FilePath $uninstaller `
             -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART") `
@@ -662,6 +676,7 @@ jobs:
             throw "Silent uninstall failed with exit code $($uninstallProcess.ExitCode)."
           }
 
+          Write-Host "==> Waiting for uninstaller to remove application files..."
           for ($attempt = 0; $attempt -lt 10 -and (Test-Path $installedApp); $attempt++) {
             Start-Sleep -Seconds 1
           }
@@ -670,11 +685,13 @@ jobs:
             throw "Silent uninstall left the installed application behind."
           }
 
+          Write-Host "==> [11/12] Removing certificate trust from LocalMachine stores..."
           Copy-Item `
             -LiteralPath (Resolve-Path $setupPath).Path `
             -Destination "Pausely-Windows-Setup.exe"
 
           foreach ($storeName in @("Root", "TrustedPublisher")) {
+            Write-Host "    Removing certificate from Cert:\LocalMachine\$storeName..."
             $certificatePath = (
               "Cert:\LocalMachine\$storeName\" +
               $env:PAUSELY_WINDOWS_CERTIFICATE_SHA1
@@ -687,6 +704,7 @@ jobs:
             }
           }
 
+          Write-Host "==> [12/12] Testing update signature verification via application binary..."
           $verificationProcess = Start-Process `
             -FilePath "out/PauselyWindows.exe" `
             -ArgumentList @(
@@ -700,6 +718,7 @@ jobs:
             throw "The updater rejected the authentic pinned installer without OS root trust."
           }
 
+          Write-Host "==> Testing tampered installer rejection..."
           $tamperedSetup = Join-Path $env:RUNNER_TEMP "Pausely-Windows-Tampered.exe"
           Copy-Item -LiteralPath $setupPath -Destination $tamperedSetup
 
@@ -735,6 +754,8 @@ jobs:
           if ($tamperVerificationProcess.ExitCode -eq 0) {
             throw "The updater accepted a tampered installer."
           }
+
+          Write-Host "==> All smoke test checks completed successfully!"
 
       - name: Remove temporary Windows signing material
         if: always()
