@@ -100,7 +100,7 @@ try {
             "release", "view", $Tag,
             "--repo", $env:GITHUB_REPOSITORY,
             "--json", "isDraft,assets",
-            "--jq", "{isDraft: .isDraft, names: [.assets[].name] | sort}"
+            "--jq", "{isDraft: .isDraft, names: [.assets[].name]}"
         ) `
         -TimeoutSeconds 60 `
         -Description "draft release verification" `
@@ -109,7 +109,8 @@ try {
     if (-not $releaseState.isDraft) {
         throw "Release became public before transactional verification completed."
     }
-    if (($releaseState.names -join "`n") -cne ($expectedSorted -join "`n")) {
+    $releaseAssetNames = @($releaseState.names | Sort-Object)
+    if (($releaseAssetNames -join "`n") -cne ($expectedSorted -join "`n")) {
         throw "Draft release asset set differs from the required five assets."
     }
 
