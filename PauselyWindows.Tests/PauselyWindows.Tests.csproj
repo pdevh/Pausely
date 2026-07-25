@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../PauselyWindows/Services/ReleaseMetadata.cs"
+             Link="Production/ReleaseMetadata.cs" />
+    <Compile Include="../PauselyWindows/Services/WindowsSignatureVerifier.cs"
+             Link="Production/WindowsSignatureVerifier.cs" />
+    <None Include="../.github/signing/Pausely-Windows-Release-Certificate.pem"
+          Link="Fixtures/Pausely-Windows-Release-Certificate.pem"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

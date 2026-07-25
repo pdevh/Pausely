@@ -3,7 +3,7 @@
 # Exit immediately on errors, unset variables, or failed pipelines.
 set -euo pipefail
 
-VERSION="1.0.0"
+VERSION_INPUT="${PAUSELY_VERSION:-1.0.0}"
 CLEAN=false
 CODE_SIGN_IDENTITY="${CODE_SIGN_IDENTITY:--}"
 REQUIRE_STABLE_SIGNING="${REQUIRE_STABLE_SIGNING:-false}"
@@ -14,9 +14,15 @@ for argument in "$@"; do
     if [[ "$argument" == "clean" ]]; then
         CLEAN=true
     else
-        VERSION="$argument"
+        VERSION_INPUT="$argument"
     fi
 done
+
+VERSION="${VERSION_INPUT#v}"
+if [[ ! "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+    echo "error: version must be MAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH" >&2
+    exit 1
+fi
 
 echo "=== Building Pausely v$VERSION ==="
 

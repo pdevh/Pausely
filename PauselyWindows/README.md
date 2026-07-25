@@ -18,17 +18,30 @@ synchronization server.
 
 ## Install a release
 
-Download `Pausely-Windows-Setup.exe` from the repository's
-[Releases](https://github.com/pdevh/Pausely/releases) page and follow the
-wizard. It performs a per-user installation under
-`%LOCALAPPDATA%\Programs\Pausely`, creates a Start-menu entry and uninstaller,
-and offers an optional desktop shortcut. The application is self-contained, so
-users do not need to install .NET.
+Download Windows builds from the repository's
+[Releases](https://github.com/pdevh/Pausely/releases) page:
+
+| Download | Role |
+|---|---|
+| `Pausely-Windows-Setup.exe` | Recommended: per-user setup wizard |
+| `Pausely-Windows.exe` | Secondary: portable application that runs without installation |
+
+The setup wizard installs under `%LOCALAPPDATA%\Programs\Pausely`, creates a
+Start-menu entry and uninstaller, and offers an optional desktop shortcut. The
+portable executable creates none of those. Both downloads are self-contained,
+so users do not need to install .NET.
 
 The application, installer, and uninstaller are Authenticode signed and RFC
 3161 timestamped with Pausely's stable self-signed Windows release identity.
 Windows does not publicly trust this no-cost certificate, so SmartScreen or the
-installer can show **Unknown publisher**. Download it only from this repository.
+installer can show **Unknown publisher**. If SmartScreen displays **Windows
+protected your PC**, select **More info**, verify the expected filename, and
+select **Run anyway** only when the file came from this repository's Releases
+page. The signature lets Pausely detect tampering and enforce signer continuity;
+it does not remove Microsoft's reputation warning or create a publicly trusted
+publisher. Microsoft Store distribution is the only route that reliably avoids
+the prompt; this release model remains free and self-signed.
+
 The installer contains one x64 application payload, which runs natively on x64
 Windows and through built-in x64 emulation on Windows 11 on Arm. Separate x86
 and Arm64 payloads are not currently required for majority compatibility.
@@ -60,16 +73,12 @@ Manager to close Pausely only when installation is ready to proceed, updates
 the per-user installation, and relaunches the app. Failed downloads, damaged or
 mismatched signatures, and installer launch failures leave the running app open.
 
-Older portable releases only know the asset name `Pausely-Windows.zip`.
-Releases continue to include that signed bridge payload so dormant installations
-can obtain the installer-aware updater. Once the bridge app restarts, it offers
-to finish installation through the signed wizard even when the release version
-has not changed.
-
 ## Installer source
 
 The Inno Setup definition is in `installer/Pausely.iss`. The release workflow
-uses a stable `AppId`, a non-administrative per-user installation, signed setup
-and uninstall executables, Start-menu integration, optional desktop shortcut,
-silent install/uninstall smoke tests, and the same signed app payload retained
-inside the legacy compatibility ZIP.
+uses a stable `AppId`, a non-administrative per-user installation, Start-menu
+integration, an optional desktop shortcut, and silent install/uninstall smoke
+tests. Candidate and tag builds verify the pinned application signature
+immediately before Inno compilation and use the `PauselySign` hook for the setup
+executable and embedded uninstaller. PR and `main` validation compile the same
+installer without release secrets or publishing.
