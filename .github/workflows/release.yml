@@ -504,7 +504,7 @@ jobs:
               "/NORESTART",
               "/NOICONS",
               "/SP-",
-              "/DIR=`"$smokeDirectory`""
+              "/DIR=$smokeDirectory"
             ) `
             -Wait `
             -PassThru
@@ -549,11 +549,11 @@ jobs:
               "/VERYSILENT",
               "/SUPPRESSMSGBOXES",
               "/NORESTART",
-              "/FORCECLOSEAPPLICATIONS",
+              "/NOCLOSEAPPLICATIONS",
               "/SP-",
               "/PAUSELYAUTOUPDATE=1",
-              "/PAUSELYRUNNINGEXE=`"$installedApp`"",
-              "/DIR=`"$smokeDirectory`""
+              "/PAUSELYRUNNINGEXE=$installedApp",
+              "/DIR=$smokeDirectory"
             ) `
             -Wait `
             -PassThru
@@ -615,11 +615,11 @@ jobs:
               "/VERYSILENT",
               "/SUPPRESSMSGBOXES",
               "/NORESTART",
-              "/FORCECLOSEAPPLICATIONS",
+              "/NOCLOSEAPPLICATIONS",
               "/SP-",
               "/PAUSELYAUTOUPDATE=1",
-              "/PAUSELYRUNNINGEXE=`"$portableApp`"",
-              "/DIR=`"$smokeDirectory`""
+              "/PAUSELYRUNNINGEXE=$portableApp",
+              "/DIR=$smokeDirectory"
             ) `
             -Wait `
             -PassThru
@@ -705,11 +705,12 @@ jobs:
           }
 
           Write-Host "==> [12/12] Testing update signature verification via application binary..."
+          $resolvedSetup = (Resolve-Path $setupPath).Path
           $verificationProcess = Start-Process `
             -FilePath "out/PauselyWindows.exe" `
             -ArgumentList @(
               "--verify-update-signature",
-              "`"$(Resolve-Path $setupPath)`""
+              $resolvedSetup
             ) `
             -Wait `
             -PassThru
@@ -746,7 +747,7 @@ jobs:
             -FilePath "out/PauselyWindows.exe" `
             -ArgumentList @(
               "--verify-update-signature",
-              "`"$tamperedSetup`""
+              $tamperedSetup
             ) `
             -Wait `
             -PassThru
