@@ -20,8 +20,29 @@ $installDirectory = Join-Path $env:RUNNER_TEMP "Pausely-Lifecycle"
 $expectedCertificateSha1 = "E729BC983B9B5A1F145103066D43FC53A58D6C57"
 $managedProcesses = [Collections.Generic.List[System.Diagnostics.Process]]::new()
 $fixtureResults = [ordered]@{}
+$lifecycleResults = [ordered]@{}
+$lifecycleStatus = "incomplete"
 
 New-Item -ItemType Directory -Path $diagnostics -Force | Out-Null
+
+function Write-LifecycleSummary {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Status
+    )
+
+    [pscustomobject]@{
+        Version = $Version
+        Signed = [bool]$Signed
+        Status = $Status
+        Checks = $lifecycleResults
+        SignatureFixtures = $fixtureResults
+    } | ConvertTo-Json -Depth 5 | Set-Content `
+        -LiteralPath (Join-Path $diagnostics "lifecycle-summary.json") `
+        -Encoding utf8
+}
+
+Write-LifecycleSummary -Status $lifecycleStatus
 
 function Assert-PinnedSignature {
     param(
@@ -36,6 +57,7 @@ function Assert-PinnedSignature {
         -ArgumentList @("--verify-update-signature", $Path) `
         -TimeoutSeconds 60 `
         -Description "production signature verification: $Label" | Out-Null
+    $lifecycleResults["signature-$Label"] = "accepted"
 }
 
 function Assert-PinnedSignatureRejected {
@@ -91,6 +113,7 @@ if (Test-Path -LiteralPath $installDirectory) {
 try {
     if ($Signed) {
         Assert-NoPinnedTrust
+        $lifecycleResults["pinned-certificate-absent-before"] = $true
         Assert-PinnedSignature -Path $portable -Label "portable application"
         Assert-PinnedSignature -Path $setup -Label "setup"
         $fixtureResults["authentic"] = "accepted"
@@ -108,6 +131,7 @@ try {
         ) `
         -TimeoutSeconds 180 `
         -Description "silent install" | Out-Null
+    $lifecycleResults["silent-install"] = "passed"
 
     $installedApp = Join-Path $installDirectory "PauselyWindows.exe"
     $uninstaller = Join-Path $installDirectory "unins000.exe"
@@ -121,6 +145,7 @@ try {
         (Get-FileHash -LiteralPath $installedApp -Algorithm SHA256).Hash) {
         throw "Installed application is not byte-identical to the signed portable build."
     }
+    $lifecycleResults["installed-payload-byte-identical"] = $true
 
     if ($Signed) {
         Assert-PinnedSignature -Path $installedApp -Label "installed application"
@@ -146,6 +171,7 @@ try {
     if ($initialProcess.WaitForExit(3000)) {
         throw "Installed Pausely exited during its launch smoke test."
     }
+    $lifecycleResults["installed-application-launch"] = "passed"
 
     Invoke-PauselyProcess `
         -FilePath $setup `
@@ -185,6 +211,7 @@ try {
         throw "Automatic update did not close the original application process."
     }
     Stop-PauselyProcessTree -Process $relaunched
+    $lifecycleResults["in-place-update-and-relaunch"] = "passed"
 
     $portableProcess = Start-PauselyProcess `
         -FilePath $portable `
@@ -194,6 +221,7 @@ try {
         throw "Portable Pausely exited during its launch smoke test."
     }
     Stop-PauselyProcessTree -Process $portableProcess
+    $lifecycleResults["portable-application-launch"] = "passed"
 
     if ($Signed) {
         $tamperedSetup = Join-Path $env:RUNNER_TEMP "Pausely-Tampered.exe"
@@ -338,10 +366,13 @@ try {
     if (Test-Path -LiteralPath $uninstallRegistryPath) {
         throw "Silent uninstall left the preserved AppId registration behind."
     }
+    $lifecycleResults["silent-uninstall"] = "passed"
 
     if ($Signed) {
         Assert-NoPinnedTrust
+        $lifecycleResults["pinned-certificate-absent-after"] = $true
     }
+    $lifecycleStatus = "success"
 }
 finally {
     foreach ($process in $managedProcesses) {
@@ -349,8 +380,10 @@ finally {
     }
     if ($Signed) {
         Assert-NoPinnedTrust
+        $lifecycleResults["pinned-certificate-absent-finally"] = $true
     }
     $fixtureResults | ConvertTo-Json | Set-Content `
         -LiteralPath (Join-Path $diagnostics "signature-fixtures.json") `
         -Encoding utf8
+    Write-LifecycleSummary -Status $lifecycleStatus
 }
