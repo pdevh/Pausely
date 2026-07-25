@@ -377,12 +377,15 @@ jobs:
           # The certificate is never installed on an end user's machine.
           Write-Host "Adding temporary noninteractive certificate trust"
           foreach ($storeName in @("Root", "TrustedPublisher")) {
-            $storePath = "Cert:\CurrentUser\$storeName"
-            $certutilOutput = & certutil.exe -user -f -addstore $storeName $certificatePath
-            if ($LASTEXITCODE -ne 0) {
-              throw "certutil failed while adding certificate trust to $storePath.`n$($certutilOutput -join [Environment]::NewLine)"
-            }
+            $store = [Security.Cryptography.X509Certificates.X509Store]::new(
+              $storeName,
+              [Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
+            )
+            $store.Open([Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+            $store.Add($publicCertificate)
+            $store.Close()
 
+            $storePath = "Cert:\CurrentUser\$storeName"
             $trustedCertificate = Get-Item -LiteralPath "$storePath\$expectedCertificateSha1" `
               -ErrorAction SilentlyContinue
             if ($null -eq $trustedCertificate) {
@@ -399,7 +402,6 @@ jobs:
 
           "PAUSELY_SIGNTOOL_PATH=$($signTool.FullName)" >> $env:GITHUB_ENV
           "PAUSELY_WINDOWS_CERTIFICATE_SHA256=$expectedCertificateSha256" >> $env:GITHUB_ENV
-
       - name: Sign and verify Windows app
         shell: pwsh
         run: |
