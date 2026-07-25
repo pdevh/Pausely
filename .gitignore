@@ -47,6 +47,8 @@ Temporary Items
 
 /PauselyWindows/bin
 /PauselyWindows/obj
+/PauselyWindows.Tests/bin
+/PauselyWindows.Tests/obj
 /out/
 /installer-out/
 Pausely-Windows-Setup.exe

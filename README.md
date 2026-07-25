@@ -24,6 +24,16 @@ server.
 Prebuilt macOS and Windows packages are published on the repository's
 [Releases](https://github.com/pdevh/Pausely/releases) page.
 
+| Download | Platform | Role |
+|---|---|---|
+| `Pausely-macOS.dmg` | macOS | Recommended installation: drag Pausely to Applications |
+| `Pausely-macOS.zip` | macOS | Sparkle update archive; keep it for automatic updates rather than manual installation |
+| `Pausely-Windows-Setup.exe` | Windows | Recommended installation: per-user setup wizard |
+| `Pausely-Windows.exe` | Windows | Secondary portable download: run directly without installing |
+
+No separate checksum files are published. The applications' update mechanisms
+verify update metadata and cryptographic signatures automatically.
+
 ### macOS
 
 Requirements: macOS 13 or newer on Apple Silicon or Intel.
@@ -53,14 +63,25 @@ through its built-in x64 application support. The release is self-contained, so
 installing the .NET runtime separately is not required.
 
 1. Download and run `Pausely-Windows-Setup.exe`.
-2. Follow the installation wizard. Pausely is installed for the current user,
+2. If SmartScreen shows **Windows protected your PC**, select **More info**,
+   verify that the file is named `Pausely-Windows-Setup.exe`, then select
+   **Run anyway** only if you downloaded it from this repository's Releases
+   page. If Windows instead shows an **Unknown publisher** confirmation, review
+   the same source and filename before continuing.
+3. Follow the installation wizard. Pausely is installed for the current user,
    adds a Start-menu shortcut, and can optionally add a desktop shortcut.
+
+`Pausely-Windows.exe` is available as a secondary portable option. It uses the
+same self-contained x64 application payload but does not create an installed
+app, Start-menu entry, desktop shortcut, or uninstaller.
 
 The application, installer, and uninstaller are Authenticode signed and
 timestamped with Pausely's stable Windows release identity. This identity is
 self-signed so releases can be produced without a paid signing service.
 Windows does not publicly trust it, so SmartScreen or the installer may still
-show **Unknown publisher**. Download installers only from this repository.
+show **Unknown publisher**. The signature provides tamper detection and signer
+continuity for Pausely's updater; it does not make Microsoft publicly trust the
+publisher or suppress reputation warnings.
 
 ## macOS screen-recording permission
 
@@ -103,10 +124,6 @@ runs the installer silently. A missing digest, damaged signature, certificate
 mismatch, or installer-launch failure aborts the update without shutting down
 the running app.
 
-`Pausely-Windows.zip` remains attached to releases only as a compatibility
-bridge for older portable versions whose updater hardcodes that filename. New
-installations should use the setup wizard.
-
 ## Build from source
 
 ### macOS
@@ -118,6 +135,9 @@ repository root:
 ./build.sh 1.0.0
 open Pausely.app
 ```
+
+`build.sh` also accepts a strict release tag such as `v1.0.6` and writes the
+normalized `1.0.6` version to both macOS bundle-version fields.
 
 Pass `clean` after the version to clear Swift Package Manager's build cache:
 
@@ -147,13 +167,23 @@ dotnet publish PauselyWindows/PauselyWindows.csproj -c Release -r win-x64 --self
 
 ## Maintainer release setup
 
-Every push to `main` builds both platforms and publishes a versioned GitHub
-release after both builds succeed. The macOS artifact is a universal Intel/Apple
-Silicon app distributed in a drag-to-Applications DMG. The Windows artifact is a
-signed per-user installer containing a self-contained x64 executable. Native
-Windows x86 and Arm64 payloads are intentionally not produced: x64 covers the
-supported conventional PCs and Windows 11 on Arm through built-in emulation,
-without splitting the update channel.
+Pull requests and pushes to `main` compile and smoke-test both platforms without
+publishing or using release-signing secrets. A manual candidate run exercises
+the persistent signing identities and uploads private candidate artifacts and
+diagnostics, but does not create a public release.
+
+Public releases run only for tags matching `vMAJOR.MINOR.PATCH`. The tag supplies
+the application, installer, DMG, appcast, and release version. Publication is
+atomic: the release contains `Pausely-macOS.dmg`, `Pausely-macOS.zip`,
+`appcast.xml`, `Pausely-Windows-Setup.exe`, and `Pausely-Windows.exe`, or no
+public release is created.
+
+The macOS build remains a universal Intel/Apple Silicon app distributed in a
+drag-to-Applications DMG, with its ZIP retained for Sparkle updates. The Windows
+build provides a signed per-user installer and a signed portable copy of the
+same self-contained x64 executable. Native Windows x86 and Arm64 payloads are
+intentionally not produced: x64 covers supported conventional PCs and Windows
+11 on Arm through built-in emulation, without splitting the update channel.
 
 `PauselyIcon.icon/` is the editable icon source. `Pausely.icns` and
 `PauselyWindows/Pausely.ico` are the generated platform assets consumed by the
@@ -217,9 +247,11 @@ Sparkle's documented key-rotation procedure.
 Windows releases use a dedicated long-lived self-signed RSA code-signing
 certificate, with no Azure subscription or paid developer account. The workflow
 signs and RFC 3161 timestamps the app, Inno Setup installer, and embedded
-uninstaller. It verifies the exact certificate SHA-256, code-signing EKU,
-timestamp, installation, installed signatures, update relaunch, portable
-migration, tamper rejection, and uninstallation before allowing a release.
+uninstaller. A shared verifier checks intact Authenticode content, the exact
+certificate SHA-256, code-signing EKU, a valid RFC 3161 timestamp, and permits
+only the expected self-signed `CERT_E_UNTRUSTEDROOT` policy result. Candidate
+and release lifecycle tests cover installation, installed signatures, in-place
+update and relaunch, tamper and wrong-signer rejection, and uninstallation.
 
 The committed public certificate is
 `.github/signing/Pausely-Windows-Release-Certificate.pem`; its DER SHA-256 is:
@@ -240,15 +272,18 @@ cross-load those secrets.
 The updater embeds the certificate SHA-256 and accepts an installer only when
 Windows verifies that its Authenticode content is intact and the actual signer
 matches that pin. It deliberately permits the precise “untrusted root” result
-caused by this self-signed leaf; every other trust, digest, expiry, usage, or
-policy failure is rejected. The certificate is never added to an end user's
-Windows trust store.
+caused by this self-signed leaf; every other chain, digest, expiry, usage,
+timestamp, or policy failure is rejected. Neither CI nor Pausely adds the
+certificate to Windows `Root` or `TrustedPublisher`.
 
 This provides cryptographic release and update continuity, but it cannot remove
-Windows' **Unknown publisher** or SmartScreen warnings. Only a publicly trusted
-commercial certificate or managed signing service can do that. If the
-certificate is ever rotated, first ship a transition updater that trusts both
-old and new pins; replacing it directly would strand installed clients.
+Windows' **Unknown publisher** or SmartScreen warnings; Microsoft treats this
+self-signed identity like an unsigned publisher for those purposes. Microsoft
+Store distribution is the only route that reliably avoids the prompt, and
+Pausely does not require a Store fee, paid certificate, or managed signing
+service. A publicly trusted publisher identity remains an optional future swap.
+If the certificate is ever rotated, first ship a transition updater that trusts
+both old and new pins; replacing it directly would strand installed clients.
 
 Windows-specific implementation notes are in
 [`PauselyWindows/README.md`](PauselyWindows/README.md).

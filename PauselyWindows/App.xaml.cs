@@ -30,8 +30,13 @@ namespace PauselyWindows
                     "--verify-update-signature",
                     StringComparison.OrdinalIgnoreCase))
             {
-                bool verified = UpdateService.VerifyReleaseInstallerSignature(e.Args[1]);
-                Shutdown(verified ? 0 : 1);
+                SignatureVerificationResult result =
+                    WindowsSignatureVerifier.VerifyFile(e.Args[1]);
+                if (!result.IsValid)
+                {
+                    Logger.Error($"Signature verification failed: {result.Error}");
+                }
+                Shutdown(result.IsValid ? 0 : 1);
                 return;
             }
 
@@ -488,13 +493,10 @@ namespace PauselyWindows
 
         private void UpdateService_UpdateAvailable(UpdateInfo info)
         {
-            string updateDescription = info.IsInstallerMigration
-                ? "Finish installing Pausely to receive signed, reliable updates."
-                : $"Pausely v{info.Version} is available. Click to install.";
+            string updateDescription =
+                $"Pausely v{info.Version} is available. Click to install.";
             Logger.Info(
-                info.IsInstallerMigration
-                    ? "The portable installation can be migrated to the signed installer."
-                    : $"Update check completed: New version v{info.Version} is available.");
+                $"Update check completed: New version v{info.Version} is available.");
             Dispatcher.Invoke(() =>
             {
                 if (_updateBalloonClickHandler != null)
@@ -548,7 +550,7 @@ namespace PauselyWindows
                 _taskbarIcon.TrayBalloonTipClicked += clickHandler;
 
                 _taskbarIcon.ShowBalloonTip(
-                    info.IsInstallerMigration ? "Finish installing Pausely" : "Update Available",
+                    "Update Available",
                     updateDescription,
                     BalloonIcon.Info);
             });

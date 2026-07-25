@@ -34,9 +34,11 @@ Compression=lzma2/ultra64
 SolidCompression=yes
 CloseApplications=yes
 RestartApplications=no
+#ifdef SignedBuild
 SignTool=PauselySign
 SignedUninstaller=yes
 SignedUninstallerDir={#OutputDir}\signed-uninstallers
+#endif
 VersionInfoVersion={#AppVersion}
 VersionInfoCompany=Pausely
 VersionInfoDescription=Pausely installer
@@ -44,7 +46,7 @@ VersionInfoProductName=Pausely
 VersionInfoProductVersion={#AppVersion}
 
 [Files]
-Source: "{#SourceDir}\PauselyWindows.exe"; DestDir: "{app}"; Flags: ignoreversion signcheck
+Source: "{#SourceDir}\PauselyWindows.exe"; DestDir: "{app}"; Flags: ignoreversion
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
