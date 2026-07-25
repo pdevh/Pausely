@@ -332,6 +332,8 @@ Copy-Item -LiteralPath $builtSetup -Destination $setupAsset
     Signed = [bool]$Signed
     Portable = $portableAsset
     Setup = $setupAsset
+    CertificateSha256Pin = $expectedCertificateSha256
+    PfxMatchedCertificateSha256Pin = [bool]$Signed
 } | ConvertTo-Json | Set-Content `
     -LiteralPath (Join-Path $diagnosticsDirectory "build-summary.json") `
     -Encoding utf8

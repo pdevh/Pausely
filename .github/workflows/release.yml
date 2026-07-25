@@ -295,12 +295,27 @@ jobs:
             Format-Table ProcessName, Id, Path -AutoSize |
             Out-String |
             Set-Content release-diagnostics/processes.txt
+          $pinnedThumbprint = 'E729BC983B9B5A1F145103066D43FC53A58D6C57'
+          $pinnedStoreState = [ordered]@{}
           foreach ($storeName in @('My', 'Root', 'TrustedPublisher')) {
-            Get-ChildItem "Cert:\CurrentUser\$storeName" |
+            $certificates = @(
+              Get-ChildItem "Cert:\CurrentUser\$storeName" |
               Select-Object Subject, Thumbprint |
-              ConvertTo-Json |
+              Sort-Object Thumbprint
+            )
+            ConvertTo-Json -InputObject $certificates |
               Set-Content "release-diagnostics/cert-$storeName.json"
+            $pinnedStoreState[$storeName] = -not [bool](
+              $certificates |
+                Where-Object Thumbprint -EQ $pinnedThumbprint
+            )
           }
+          [pscustomobject]@{
+            CertificateThumbprint = $pinnedThumbprint
+            AbsentFromCurrentUserStores = $pinnedStoreState
+          } |
+            ConvertTo-Json -Depth 3 |
+            Set-Content release-diagnostics/pinned-trust-summary.json
 
       - name: Remove temporary Windows signing material
         if: always()
@@ -317,6 +332,11 @@ jobs:
           if (Test-Path -LiteralPath $pfxPath) {
             throw 'Temporary Windows signing PFX survived cleanup.'
           }
+          [pscustomobject]@{
+            TemporaryPfxRemoved = $true
+          } |
+            ConvertTo-Json |
+            Set-Content release-diagnostics/cleanup-summary.json
 
       - name: Upload Windows assets
         if: always()

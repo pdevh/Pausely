@@ -52,6 +52,17 @@ DIAGNOSTICS_DIR="$REPO_ROOT/release-diagnostics-macos"
 run_timed 30 rm -rf "$ASSET_DIR" "$DIAGNOSTICS_DIR"
 run_timed 30 mkdir -p "$ASSET_DIR" "$DIAGNOSTICS_DIR"
 
+write_build_summary() {
+    local status="$1"
+    local architectures="${2:-unknown}"
+    printf 'version=%s\nmode=%s\nstatus=%s\narchitectures=%s\n' \
+        "$VERSION" \
+        "$MODE" \
+        "$status" \
+        "$architectures" > "$DIAGNOSTICS_DIR/build-summary.txt"
+}
+write_build_summary started
+
 cd "$REPO_ROOT"
 if [[ "$MODE" == "signed" ]]; then
     export REQUIRE_STABLE_SIGNING=true
@@ -154,12 +165,22 @@ if [[ "$MODE" == "signed" ]]; then
     run_timed 30 cp \
         "$ASSET_DIR/Pausely-macOS.zip" \
         "$SPARKLE_DIR/Pausely-macOS.zip"
+    LATEST_RELEASE_TAG=$(run_timed 30 gh api \
+        "/repos/${GITHUB_REPOSITORY}/releases/latest" \
+        --jq .tag_name)
+    if [[ "$LATEST_RELEASE_TAG" != v* ||
+        ! "${LATEST_RELEASE_TAG#v}" =~ $SEMVER_RE ]]; then
+        echo "error: latest release tag '$LATEST_RELEASE_TAG' is not strict SemVer" >&2
+        exit 1
+    fi
     run_timed 120 gh api \
-        --method POST \
-        "/repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
-        -f "tag_name=$RELEASE_TAG" \
-        -f "target_commitish=${GITHUB_SHA}" \
-        --jq .body > "$SPARKLE_DIR/Pausely-macOS.md"
+        "/repos/${GITHUB_REPOSITORY}/compare/${LATEST_RELEASE_TAG}...${GITHUB_SHA}" \
+        --jq \
+        '.commits | map("- " + (.commit.message | split("\n")[0])) | join("\n")' \
+        > "$SPARKLE_DIR/Pausely-macOS.md"
+    if [[ ! -s "$SPARKLE_DIR/Pausely-macOS.md" ]]; then
+        printf 'Pausely %s\n' "$VERSION" > "$SPARKLE_DIR/Pausely-macOS.md"
+    fi
 
     SPARKLE_KEY_FILE=$(run_timed 30 mktemp \
         "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/pausely-sparkle-key.XXXXXX")
@@ -193,7 +214,4 @@ if [[ "$MODE" == "signed" ]]; then
     trap - EXIT
 fi
 
-printf 'version=%s\nmode=%s\narchitectures=%s\n' \
-    "$VERSION" \
-    "$MODE" \
-    "$ARCHS" > "$DIAGNOSTICS_DIR/build-summary.txt"
+write_build_summary success "$ARCHS"
