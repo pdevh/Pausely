@@ -26,7 +26,8 @@ final class DialogLayoutTests: XCTestCase {
         window.appearance = NSAppearance(named: appearance)
         window.isReleasedWhenClosed = false
         defer { window.close() }
-        window.orderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
         try await Task.sleep(nanoseconds: 500_000_000)
         controller.view.layoutSubtreeIfNeeded()
         let size = controller.view.fittingSize

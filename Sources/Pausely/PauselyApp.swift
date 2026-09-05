@@ -445,17 +445,12 @@ class MenuManager: NSObject, NSMenuDelegate {
             )
             
             let hostingController = NSHostingController(rootView: view)
-            let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 420, height: 260),
-                styleMask: [.titled, .fullSizeContentView],
-                backing: .buffered,
-                defer: false
-            )
+            let window = NSWindow(contentViewController: hostingController)
+            window.styleMask = [.titled, .fullSizeContentView]
             window.titlebarAppearsTransparent = true
             window.titleVisibility = .hidden
             window.isOpaque = false
             window.backgroundColor = .clear
-            window.contentViewController = hostingController
             window.isReleasedWhenClosed = false
             window.isMovableByWindowBackground = true
             
@@ -489,17 +484,12 @@ class MenuManager: NSObject, NSMenuDelegate {
             )
             
             let hostingController = NSHostingController(rootView: view)
-            let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 420, height: 250),
-                styleMask: [.titled, .fullSizeContentView],
-                backing: .buffered,
-                defer: false
-            )
+            let window = NSWindow(contentViewController: hostingController)
+            window.styleMask = [.titled, .fullSizeContentView]
             window.titlebarAppearsTransparent = true
             window.titleVisibility = .hidden
             window.isOpaque = false
             window.backgroundColor = .clear
-            window.contentViewController = hostingController
             window.isReleasedWhenClosed = false
             window.isMovableByWindowBackground = true
             
