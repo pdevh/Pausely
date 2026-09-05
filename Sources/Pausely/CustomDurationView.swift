@@ -70,10 +70,10 @@ struct CustomDurationView: View {
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
             HStack(spacing: 4) {
-                Button { draft.adjust(by: -delta) } label: { Image(systemName: "minus") }
+                Button { draft.adjust(by: -delta) } label: { Image(systemName: "minus").frame(width: 16, height: 16) }
                     .disabled(!draft.canAdjust(by: -delta))
                     .accessibilityLabel("Subtract one \(unit)")
-                Button { draft.adjust(by: delta) } label: { Image(systemName: "plus") }
+                Button { draft.adjust(by: delta) } label: { Image(systemName: "plus").frame(width: 16, height: 16) }
                     .disabled(!draft.canAdjust(by: delta))
                     .accessibilityLabel("Add one \(unit)")
             }
