@@ -72,12 +72,16 @@
                     <MenuItem Header="10 minutes" Tag="600" Click="WorkInterval_Click" />
                     <MenuItem Header="20 minutes (Standard)" Tag="1200" Click="WorkInterval_Click" IsChecked="True" />
                     <MenuItem Header="30 minutes" Tag="1800" Click="WorkInterval_Click" />
+                    <Separator />
+                    <MenuItem Header="Custom…" Tag="custom" Click="CustomWorkInterval_Click" />
                 </MenuItem>
                 <MenuItem x:Name="BreakDurationMenuItem" Header="Break Duration">
                     <MenuItem Header="5 seconds (Test Mode)" Tag="5" Click="BreakDuration_Click" />
                     <MenuItem Header="15 seconds" Tag="15" Click="BreakDuration_Click" />
                     <MenuItem Header="20 seconds (Standard)" Tag="20" Click="BreakDuration_Click" IsChecked="True" />
                     <MenuItem Header="60 seconds" Tag="60" Click="BreakDuration_Click" />
+                    <Separator />
+                    <MenuItem Header="Custom…" Tag="custom" Click="CustomBreakDuration_Click" />
                 </MenuItem>
                 <Separator />
                 <MenuItem Header="Settings">

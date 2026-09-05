@@ -1,9 +1,10 @@
 import Foundation
+import PauselyCore
 
 class AppSettings {
     static let shared = AppSettings()
     
-    private let defaults = UserDefaults.standard
+    private let defaults: UserDefaults
     
     private enum Keys {
         static let runOnStartup = "runOnStartup"
@@ -17,16 +18,23 @@ class AppSettings {
     }
     
     var workInterval: TimeInterval {
-        get { defaults.double(forKey: Keys.workInterval) }
+        get {
+            let value = defaults.double(forKey: Keys.workInterval)
+            return DurationValue.isValid(value) ? value : 1200
+        }
         set { defaults.set(newValue, forKey: Keys.workInterval) }
     }
     
     var breakDuration: TimeInterval {
-        get { defaults.double(forKey: Keys.breakDuration) }
+        get {
+            let value = defaults.double(forKey: Keys.breakDuration)
+            return DurationValue.isValid(value) ? value : 20
+        }
         set { defaults.set(newValue, forKey: Keys.breakDuration) }
     }
     
-    private init() {
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         // Register defaults
         defaults.register(defaults: [
             Keys.runOnStartup: false,

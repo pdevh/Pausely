@@ -6,18 +6,38 @@ overlay without adding a permanent application window.
 
 Both apps provide the same core workflow:
 
-- Configurable work intervals and break durations, plus a manual break action
+- Work intervals and break durations adjustable to the second, plus a manual break action
 - A pointer-following warning during the final 10 seconds before a break
 - Animated overlays based on the current desktop wallpaper
 - Randomized break guidance, snooze controls, a lock-screen action, and sound
   cues
 - Pause and resume for temporarily suspending the normal schedule
-- Six-character session codes that align schedules across macOS and Windows
+- Compact session codes that align schedules across macOS and Windows
 - Optional launch at sign-in and update checks
 
 Session codes contain the selected schedule and timing anchor. They can be
 shared directly and do not require an account or a Pausely synchronization
 server.
+
+## Custom intervals and durations
+
+In **Work Interval** or **Break Duration**, choose **Custom…** beneath the presets.
+Enter seconds (`37`), minutes and seconds (`2:37`), or hours, minutes and seconds
+(`1:02:37`). Each setting supports whole seconds from **1 second to 24 hours**.
+The editable clock and **Hours / Minutes / Seconds** adjustment buttons share one value.
+Choose **Save** to apply it; **Cancel** or Escape keeps the previous setting.
+Custom values remain selected in the menu and are saved across app restarts.
+The same controls are available on macOS and Windows.
+
+Sessions using presets keep the existing **six-character codes**. A session
+with either value customized uses **eleven characters**; both participants need
+a version of Pausely supporting custom schedules. Join accepts pasted or typed
+codes (including lowercase, spaces, and grouping hyphens) and previews the work
+and break durations before joining. Earlier Base64 invites can still be imported.
+Settings remain locked during a session; leaving restores your personal values.
+
+The compact encoding and its compatibility limits are documented in
+[the session format](docs/session-format.md).
 
 ## Download
 
@@ -164,6 +184,25 @@ To reproduce the self-contained x64 application payload:
 ```powershell
 dotnet publish PauselyWindows/PauselyWindows.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o out
 ```
+
+## Tests
+
+```bash
+swift test
+```
+
+This runs duration, editor, timer-boundary, and session tests on macOS or Linux.
+On macOS it also tests settings persistence and renders the native dialogs in
+light and dark appearances. Windows tests include settings persistence and the
+existing release-signature policy tests:
+
+```powershell
+dotnet run --project PauselyWindows.Tests/PauselyWindows.Tests.csproj -c Release
+```
+
+Both suites consume the same encoding fixtures and round-trip all 86,400 values
+for each custom field. Native macOS and Windows builds and tests run in the
+existing PR release-validation workflow; PRs do not publish a release.
 
 ## Maintainer release setup
 

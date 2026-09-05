@@ -56,3 +56,6 @@ Pausely-Windows.zip
 .idea
 tests/*
 .ahadiff/*
+
+/PauselyWindows.DialogTests/bin/
+/PauselyWindows.DialogTests/obj/

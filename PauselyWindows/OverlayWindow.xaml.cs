@@ -155,8 +155,9 @@ namespace PauselyWindows
             var anim = new DoubleAnimation
             {
                 To = to,
-                Duration = new Duration(duration),
-                BeginTime = delay,
+                // Keep one-second custom breaks readable instead of waiting for the stagger.
+                Duration = new Duration(_breakManager.BreakDuration < 5 ? TimeSpan.FromSeconds(0.1) : duration),
+                BeginTime = _breakManager.BreakDuration < 5 ? TimeSpan.Zero : delay,
                 EasingFunction = EaseOut
             };
             if (from.HasValue)
@@ -170,8 +171,9 @@ namespace PauselyWindows
             {
                 From = from,
                 To = to,
-                Duration = new Duration(duration),
-                BeginTime = delay,
+                // Keep one-second custom breaks readable instead of waiting for the stagger.
+                Duration = new Duration(_breakManager.BreakDuration < 5 ? TimeSpan.FromSeconds(0.1) : duration),
+                BeginTime = _breakManager.BreakDuration < 5 ? TimeSpan.Zero : delay,
                 EasingFunction = EaseOut
             };
             target.BeginAnimation(TranslateTransform.YProperty, anim);

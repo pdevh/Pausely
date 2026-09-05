@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0-windows7.0": {
+      "Hardcodet.NotifyIcon.Wpf": {
+        "type": "Transitive",
+        "resolved": "2.0.1",
+        "contentHash": "dtxmeZXzV2GzSm91aZ3hqzgoeVoARSkDPVCYfhVUNyyKBWYxMgNC0EcLiSYxD4Uc4alq/2qb3SmV8DgAENLRLQ=="
+      },
+      "WPF-UI": {
+        "type": "Transitive",
+        "resolved": "3.0.4",
+        "contentHash": "Jbt8nJ4MSC/WBhqx6iXOW06Rt2UUNVxA8+23AOSM63jlOIhU6e6P4BIw8rL/UnRPycOdA2vntYl5i7k53E0AGg=="
+      },
+      "pauselywindows": {
+        "type": "Project",
+        "dependencies": {
+          "Hardcodet.NotifyIcon.Wpf": "[2.0.1, )",
+          "WPF-UI": "[3.0.4, )"
+        }
+      }
+    },
+    "net10.0-windows7.0/win-x64": {}
+  }
+}

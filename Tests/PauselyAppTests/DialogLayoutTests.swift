@@ -1,0 +1,46 @@
+import AppKit
+import SwiftUI
+import XCTest
+@testable import Pausely
+
+final class DialogLayoutTests: XCTestCase {
+    @MainActor
+    func testNativeDialogsFitAndRender() async throws {
+        _ = NSApplication.shared
+        for appearance in [NSAppearance.Name.aqua, .darkAqua] {
+            try await snapshot(CustomDurationView(title: "Work interval", seconds: 37,
+                onSave: { _ in }, onCancel: {}), name: "custom-37-\(appearance.rawValue)", appearance: appearance)
+            try await snapshot(CustomDurationView(title: "Break duration", seconds: 86400,
+                onSave: { _ in }, onCancel: {}), name: "custom-24h-\(appearance.rawValue)", appearance: appearance)
+            try await snapshot(CustomDurationView(title: "Work interval", seconds: 3757,
+                onSave: { _ in }, onCancel: {}), name: "custom-hour-\(appearance.rawValue)", appearance: appearance)
+            try await snapshot(JoinSessionView(), name: "join-\(appearance.rawValue)", appearance: appearance)
+            try await snapshot(HostSessionView(code: "AAAAABBBBBB"), name: "host-custom-\(appearance.rawValue)", appearance: appearance)
+        }
+    }
+
+    @MainActor
+    private func snapshot<V: View>(_ view: V, name: String, appearance: NSAppearance.Name) async throws {
+        let controller = NSHostingController(rootView: view)
+        let window = NSWindow(contentViewController: controller)
+        window.appearance = NSAppearance(named: appearance)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+        try await Task.sleep(nanoseconds: 500_000_000)
+        controller.view.layoutSubtreeIfNeeded()
+        let size = controller.view.fittingSize
+        XCTAssertLessThanOrEqual(size.width, 520, name)
+        XCTAssertLessThanOrEqual(size.height, name.hasPrefix("custom-") ? 320 : 650, name)
+        XCTAssertGreaterThan(size.height, 200, name)
+        if let directory = ProcessInfo.processInfo.environment["PAUSELY_UI_SNAPSHOT_DIR"] {
+            let url = URL(fileURLWithPath: directory, isDirectory: true)
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            let bitmap = try XCTUnwrap(controller.view.bitmapImageRepForCachingDisplay(in: controller.view.bounds))
+            controller.view.cacheDisplay(in: controller.view.bounds, to: bitmap)
+            let data = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+            try data.write(to: url.appendingPathComponent(name + ".png"))
+        }
+    }
+}

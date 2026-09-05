@@ -2,27 +2,32 @@ using System;
 using System.IO;
 using System.Text.Json;
 using PauselyWindows;
+using PauselyWindows.Services;
 
 namespace PauselyWindows.Settings
 {
     public class AppSettings
     {
-        public static AppSettings Shared { get; } = new AppSettings();
-
         private static readonly string SettingsDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "Pausely");
         private static readonly string SettingsFile = Path.Combine(SettingsDir, "settings.json");
 
+        public static AppSettings Shared { get; } = new AppSettings();
+
         private readonly object _lock = new();
+        private readonly string _settingsFile;
 
         public bool AutoUpdateEnabled { get; set; } = false;
         public bool RunOnStartup { get; set; } = false;
         public double WorkInterval { get; set; } = 1200;
         public double BreakDuration { get; set; } = 20;
 
-        private AppSettings()
+        private AppSettings() : this(SettingsFile) { }
+
+        internal AppSettings(string settingsFile)
         {
+            _settingsFile = settingsFile;
             Load();
         }
 
@@ -32,29 +37,29 @@ namespace PauselyWindows.Settings
             {
                 try
                 {
-                    if (File.Exists(SettingsFile))
+                    if (File.Exists(_settingsFile))
                     {
-                        Logger.Info($"Loading settings from {SettingsFile}...");
-                        string json = File.ReadAllText(SettingsFile);
+                        Logger.Info($"Loading settings from {_settingsFile}...");
+                        string json = File.ReadAllText(_settingsFile);
                         var data = JsonSerializer.Deserialize<SettingsData>(json);
                         if (data != null)
                         {
                             AutoUpdateEnabled = data.AutoUpdateEnabled;
                             RunOnStartup = data.RunOnStartup;
-                            if (data.WorkInterval > 0) WorkInterval = data.WorkInterval;
-                            if (data.BreakDuration > 0) BreakDuration = data.BreakDuration;
+                            if (DurationValue.IsValid(data.WorkInterval)) WorkInterval = data.WorkInterval;
+                            if (DurationValue.IsValid(data.BreakDuration)) BreakDuration = data.BreakDuration;
                             Logger.Info("Settings loaded successfully.");
                         }
                     }
                     else
                     {
-                        Logger.Info($"Settings file {SettingsFile} not found, using default settings.");
+                        Logger.Info($"Settings file {_settingsFile} not found, using default settings.");
                     }
                 }
                 catch (Exception ex)
                 {
                     // Corrupted settings file — use defaults
-                    Logger.Error($"Failed to load app settings from {SettingsFile}, using defaults.", ex);
+                    Logger.Error($"Failed to load app settings from {_settingsFile}, using defaults.", ex);
                 }
             }
         }
@@ -65,8 +70,8 @@ namespace PauselyWindows.Settings
             {
                 try
                 {
-                    Logger.Info($"Saving settings to {SettingsFile}...");
-                    Directory.CreateDirectory(SettingsDir);
+                    Logger.Info($"Saving settings to {_settingsFile}...");
+                    Directory.CreateDirectory(Path.GetDirectoryName(_settingsFile)!);
                     var data = new SettingsData
                     {
                         AutoUpdateEnabled = this.AutoUpdateEnabled,
@@ -78,13 +83,13 @@ namespace PauselyWindows.Settings
                     {
                         WriteIndented = true
                     });
-                    File.WriteAllText(SettingsFile, json);
+                    File.WriteAllText(_settingsFile, json);
                     Logger.Info("Settings saved successfully.");
                 }
                 catch (Exception ex)
                 {
                     // Best-effort persistence — don't crash the app
-                    Logger.Error($"Failed to save app settings to {SettingsFile}", ex);
+                    Logger.Error($"Failed to save app settings to {_settingsFile}", ex);
                 }
             }
         }

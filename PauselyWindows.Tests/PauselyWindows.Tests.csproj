@@ -9,6 +9,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="../PauselyWindows/Settings/AppSettings.cs" Link="Production/AppSettings.cs" />
+    <Compile Include="../PauselyWindows/Services/Logger.cs" Link="Production/Logger.cs" />
+    <Compile Include="../PauselyWindows/Services/DurationValue.cs" Link="Production/DurationValue.cs" />
+    <Compile Include="../PauselyWindows/Services/SessionCode.cs" Link="Production/SessionCode.cs" />
+    <Compile Include="../PauselyWindows/Services/TimerTiming.cs" Link="Production/TimerTiming.cs" />
+    <None Include="../Tests/PauselyCoreTests/Fixtures/session-codes.json"
+          Link="Fixtures/session-codes.json" CopyToOutputDirectory="PreserveNewest" />
     <Compile Include="../PauselyWindows/Services/ReleaseMetadata.cs"
              Link="Production/ReleaseMetadata.cs" />
     <Compile Include="../PauselyWindows/Services/WindowsSignatureVerifier.cs"
