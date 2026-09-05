@@ -588,6 +588,21 @@ struct BreakOverlayView: View {
     // MARK: - Forward Animation (staggered per spec)
     
     private func playForwardAnimation() {
+        // Short custom breaks must show the timer before the break is over.
+        if breakManager.breakDuration < 5 {
+            wallpaperOpacity = 1
+            wallpaperBlurOpacity = 1
+            mainTextBlur = 0
+            mainTextOffsetY = 0
+            mainTextOpacity = 1
+            secondaryTextBlur = 0
+            secondaryTextOpacity = 1
+            clockAtRest = true
+            clockOpacity = 1
+            controlsBlur = 0
+            controlsOpacity = 1
+            return
+        }
         let easeOut = Animation.easeOut(duration: AnimConst.phase0Duration)
         
         // Phase 0: Background transition (frame 0–53, 1.06s)

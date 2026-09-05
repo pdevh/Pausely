@@ -8,25 +8,26 @@ final class DialogLayoutTests: XCTestCase {
     func testNativeDialogsFitAndRender() async throws {
         _ = NSApplication.shared
         for appearance in [NSAppearance.Name.aqua, .darkAqua] {
-            try snapshot(CustomDurationView(title: "Custom Work Interval",
+            try await snapshot(CustomDurationView(title: "Custom Work Interval",
                 explanation: "Time to focus between breaks.", seconds: 37,
                 onSave: { _ in }, onCancel: {}), name: "custom-37-\(appearance.rawValue)", appearance: appearance)
-            try snapshot(CustomDurationView(title: "Custom Break Duration",
+            try await snapshot(CustomDurationView(title: "Custom Break Duration",
                 explanation: "Time to rest during each break.", seconds: 86400,
                 onSave: { _ in }, onCancel: {}), name: "custom-24h-\(appearance.rawValue)", appearance: appearance)
-            try snapshot(JoinSessionView(), name: "join-\(appearance.rawValue)", appearance: appearance)
-            try snapshot(HostSessionView(code: "AAAAABBBBBB"), name: "host-custom-\(appearance.rawValue)", appearance: appearance)
+            try await snapshot(JoinSessionView(), name: "join-\(appearance.rawValue)", appearance: appearance)
+            try await snapshot(HostSessionView(code: "AAAAABBBBBB"), name: "host-custom-\(appearance.rawValue)", appearance: appearance)
         }
     }
 
     @MainActor
-    private func snapshot<V: View>(_ view: V, name: String, appearance: NSAppearance.Name) throws {
+    private func snapshot<V: View>(_ view: V, name: String, appearance: NSAppearance.Name) async throws {
         let controller = NSHostingController(rootView: view)
         let window = NSWindow(contentViewController: controller)
         window.appearance = NSAppearance(named: appearance)
         window.isReleasedWhenClosed = false
         defer { window.close() }
         window.orderFront(nil)
+        try await Task.sleep(nanoseconds: 500_000_000)
         controller.view.layoutSubtreeIfNeeded()
         let size = controller.view.fittingSize
         XCTAssertLessThanOrEqual(size.width, 520, name)

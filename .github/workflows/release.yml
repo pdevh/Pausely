@@ -116,7 +116,7 @@ jobs:
 
       - name: Run duration, session, persistence, and dialog tests
         env:
-          PAUSELY_UI_SNAPSHOT_DIR: release-diagnostics-macos/ui
+          PAUSELY_UI_SNAPSHOT_DIR: test-results-macos/ui
         run: swift test
 
       - name: Prepare persistent macOS signing identity
@@ -225,7 +225,9 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1, node24
         with:
           name: macos-diagnostics-${{ github.run_id }}
-          path: release-diagnostics-macos/
+          path: |
+            release-diagnostics-macos/
+            test-results-macos/
           if-no-files-found: warn
           retention-days: 14
 

@@ -584,7 +584,7 @@ class MenuManager: NSObject, NSMenuDelegate {
         buildMenu()
     }
     
-    /// Formats a duration into a human-friendly string rounded to the nearest 15 minutes.
+    /// Formats a duration without discarding custom seconds.
     /// Examples: 3600 → "1h", 5400 → "1h 30m", 1800 → "30m", 60 → "1m".
     private func formatFriendlyDuration(_ seconds: TimeInterval) -> String {
         DurationValue.label(Int(seconds.rounded()))
