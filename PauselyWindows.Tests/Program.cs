@@ -4,6 +4,13 @@ using PauselyWindows.Services;
 
 var tests = new (string Name, Action Body)[]
 {
+    ("custom settings persistence", TimerTests.SettingsPersistence),
+    ("duration input and validation", TimerTests.InputAndFormatting),
+    ("duration editor synchronization", TimerTests.EditorSynchronization),
+    ("second-accurate countdown and cycle boundaries", TimerTests.CycleBoundaries),
+    ("cross-platform session vectors", TimerTests.CrossPlatformVectors),
+    ("every custom second round-trips", TimerTests.EveryCustomSecond),
+    ("legacy sessions and invalid code rejection", TimerTests.LegacyAndInvalidCodes),
     ("strict semantic versions", TestSemanticVersions),
     ("SHA-256 digest parsing", TestDigestParsing),
     ("setup release asset selection", TestReleaseAssetSelection),
@@ -40,11 +47,11 @@ foreach ((string name, Action body) in tests)
 if (failures.Count > 0)
 {
     Console.Error.WriteLine(
-        $"{failures.Count} of {tests.Length} Windows policy tests failed.");
+        $"{failures.Count} of {tests.Length} Windows tests failed.");
     return 1;
 }
 
-Console.WriteLine($"PASS all {tests.Length} Windows policy tests");
+Console.WriteLine($"PASS all {tests.Length} Windows tests");
 return 0;
 
 static void TestSemanticVersions()

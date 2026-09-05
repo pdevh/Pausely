@@ -1,0 +1,170 @@
+[
+  {
+    "work": 15,
+    "rest": 5,
+    "anchor": 1788600000,
+    "code": "ABXXWA"
+  },
+  {
+    "work": 15,
+    "rest": 15,
+    "anchor": 1788600000,
+    "code": "AFXXWA"
+  },
+  {
+    "work": 15,
+    "rest": 20,
+    "anchor": 1788600000,
+    "code": "AJXXWA"
+  },
+  {
+    "work": 15,
+    "rest": 60,
+    "anchor": 1788600000,
+    "code": "ANXXWA"
+  },
+  {
+    "work": 600,
+    "rest": 5,
+    "anchor": 1788600000,
+    "code": "CBXXWA"
+  },
+  {
+    "work": 600,
+    "rest": 15,
+    "anchor": 1788600000,
+    "code": "CFXXWA"
+  },
+  {
+    "work": 600,
+    "rest": 20,
+    "anchor": 1788600000,
+    "code": "CJXXWA"
+  },
+  {
+    "work": 600,
+    "rest": 60,
+    "anchor": 1788600000,
+    "code": "CNXXWA"
+  },
+  {
+    "work": 1200,
+    "rest": 5,
+    "anchor": 1788600000,
+    "code": "EBXXWA"
+  },
+  {
+    "work": 1200,
+    "rest": 15,
+    "anchor": 1788600000,
+    "code": "EFXXWA"
+  },
+  {
+    "work": 1200,
+    "rest": 20,
+    "anchor": 1788600000,
+    "code": "EJXXWA"
+  },
+  {
+    "work": 1200,
+    "rest": 60,
+    "anchor": 1788600000,
+    "code": "ENXXWA"
+  },
+  {
+    "work": 1800,
+    "rest": 5,
+    "anchor": 1788600000,
+    "code": "GBXXWA"
+  },
+  {
+    "work": 1800,
+    "rest": 15,
+    "anchor": 1788600000,
+    "code": "GFXXWA"
+  },
+  {
+    "work": 1800,
+    "rest": 20,
+    "anchor": 1788600000,
+    "code": "GJXXWA"
+  },
+  {
+    "work": 1800,
+    "rest": 60,
+    "anchor": 1788600000,
+    "code": "GNXXWA"
+  },
+  {
+    "work": 37,
+    "rest": 13,
+    "anchor": 1788600000,
+    "code": "AAL3WBRXXWA"
+  },
+  {
+    "work": 1200,
+    "rest": 37,
+    "anchor": 1788600000,
+    "code": "AMLFWURXXWA"
+  },
+  {
+    "work": 37,
+    "rest": 20,
+    "anchor": 1788600000,
+    "code": "AAL3WCNXXWA"
+  },
+  {
+    "work": 1,
+    "rest": 1,
+    "anchor": 1788600000,
+    "code": "AAAAAABXXWA"
+  },
+  {
+    "work": 86400,
+    "rest": 86400,
+    "anchor": 1788600000,
+    "code": "3Z4R775XXWA"
+  },
+  {
+    "work": 86400,
+    "rest": 1,
+    "anchor": 1788600000,
+    "code": "3Z4HOQBXXWA"
+  },
+  {
+    "work": 1,
+    "rest": 86400,
+    "anchor": 1788600000,
+    "code": "AAAKRP5XXWA"
+  },
+  {
+    "work": 3599,
+    "rest": 61,
+    "anchor": 2147483650,
+    "code": "BFB3VHQAAAC"
+  },
+  {
+    "work": 1517,
+    "rest": 37,
+    "anchor": 4194303,
+    "code": "APTVCET7777"
+  },
+  {
+    "work": 37,
+    "rest": 13,
+    "anchor": 4194304,
+    "code": "AAL3WBQAAAA"
+  },
+  {
+    "work": 37,
+    "rest": 13,
+    "anchor": 4194305,
+    "code": "AAL3WBQAAAB"
+  },
+  {
+    "work": 37,
+    "rest": 13,
+    "anchor": 0,
+    "code": "AAL3WBQAAAA"
+  }
+]

@@ -247,8 +247,15 @@ namespace PauselyWindows
         private static void SetTaggedMenuCheckmarks(System.Windows.Controls.MenuItem parent, double selectedValue)
         {
             if (parent == null) return;
+            bool hasPreset = parent.Items.OfType<System.Windows.Controls.MenuItem>()
+                .Any(item => double.TryParse(item.Tag?.ToString(), out double value) && value == selectedValue);
             foreach (object item in parent.Items)
             {
+                if (item is System.Windows.Controls.MenuItem custom && custom.Tag?.ToString() == "custom")
+                {
+                    custom.IsChecked = !hasPreset;
+                    custom.Header = hasPreset ? "Custom…" : $"Custom: {DurationValue.Label((int)selectedValue)}…";
+                }
                 if (item is System.Windows.Controls.MenuItem menuItem &&
                     double.TryParse(menuItem.Tag?.ToString(), out double value))
                 {
@@ -384,6 +391,30 @@ namespace PauselyWindows
             });
         }
 
+        private void CustomWorkInterval_Click(object sender, RoutedEventArgs e) => ShowCustomDuration(true);
+        private void CustomBreakDuration_Click(object sender, RoutedEventArgs e) => ShowCustomDuration(false);
+
+        private void ShowCustomDuration(bool isWorkInterval)
+        {
+            if (_breakManager.IsSyncedSession) return;
+            _taskbarIcon.ContextMenu.IsOpen = false;
+            var window = new CustomDurationWindow(isWorkInterval,
+                (int)(isWorkInterval ? _breakManager.WorkInterval : _breakManager.BreakDuration));
+            if (window.ShowDialog() != true || window.SelectedSeconds is not int seconds || _breakManager.IsSyncedSession) return;
+            if (isWorkInterval)
+            {
+                _breakManager.WorkInterval = seconds;
+                AppSettings.Shared.WorkInterval = seconds;
+            }
+            else
+            {
+                _breakManager.BreakDuration = seconds;
+                AppSettings.Shared.BreakDuration = seconds;
+            }
+            AppSettings.Shared.Save();
+            UpdateStatusMenu();
+        }
+
         private void WorkInterval_Click(object sender, RoutedEventArgs e)
         {
             var menuItem = (System.Windows.Controls.MenuItem)sender;
@@ -443,7 +474,10 @@ namespace PauselyWindows
             UpdateStatusMenu();
             _taskbarIcon.ShowBalloonTip(
                 "Session ready",
-                "The invite code was copied to your clipboard.",
+                "The invite code was copied to your clipboard." +
+                    (!SessionCode.WorkPresets.Contains((int)_breakManager.WorkInterval) ||
+                     !SessionCode.BreakPresets.Contains((int)_breakManager.BreakDuration)
+                        ? " Custom schedules need the latest Pausely on both devices." : ""),
                 BalloonIcon.Info);
         }
 

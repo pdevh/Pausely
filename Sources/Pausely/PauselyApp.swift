@@ -1,4 +1,5 @@
 import SwiftUI
+import PauselyCore
 import AppKit
 
 class AppDelegate: NSObject, NSApplicationDelegate {
@@ -135,6 +136,7 @@ class MenuManager: NSObject, NSMenuDelegate {
     private let breakManager = BreakManager.shared
     private var statusMenuItemView: StatusMenuItemView?
     private var sessionDialogWindow: NSWindow?
+    private var customDurationWindow: NSWindow?
     private lazy var eyeOpenImage = NSImage(systemSymbolName: "eye.fill", accessibilityDescription: "Pausely")
     private lazy var eyeClosedImage = NSImage(systemSymbolName: "eye.slash.fill", accessibilityDescription: "Pausely")
     private lazy var pauseImage = NSImage(systemSymbolName: "pause.fill", accessibilityDescription: "Pausely")
@@ -275,6 +277,8 @@ class MenuManager: NSObject, NSMenuDelegate {
         addIntervalItem(to: workIntervalSubmenu, title: "10 minutes", value: 600, current: currentInterval)
         addIntervalItem(to: workIntervalSubmenu, title: "20 minutes (Standard)", value: 1200, current: currentInterval)
         addIntervalItem(to: workIntervalSubmenu, title: "30 minutes", value: 1800, current: currentInterval)
+        addCustomItem(to: workIntervalSubmenu, current: currentInterval,
+                      presets: SessionCode.workPresets, action: #selector(customWorkIntervalSelected))
         
         // Break Duration configuration
         let breakDurationSubmenu = NSMenu()
@@ -289,6 +293,8 @@ class MenuManager: NSObject, NSMenuDelegate {
         addDurationItem(to: breakDurationSubmenu, title: "15 seconds", value: 15, current: currentDuration)
         addDurationItem(to: breakDurationSubmenu, title: "20 seconds (Standard)", value: 20, current: currentDuration)
         addDurationItem(to: breakDurationSubmenu, title: "60 seconds", value: 60, current: currentDuration)
+        addCustomItem(to: breakDurationSubmenu, current: currentDuration,
+                      presets: SessionCode.breakPresets, action: #selector(customBreakDurationSelected))
         
         menu.addItem(NSMenuItem.separator())
         
@@ -339,6 +345,58 @@ class MenuManager: NSObject, NSMenuDelegate {
         settingsMenu.addItem(quitItem)
     }
     
+    private func addCustomItem(to menu: NSMenu, current: Double, presets: [Int], action: Selector) {
+        menu.addItem(.separator())
+        let isCustom = !presets.contains(Int(current))
+        let title = isCustom ? "Custom: \(DurationValue.label(Int(current)))…" : "Custom…"
+        let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+        item.target = self
+        item.state = isCustom ? .on : .off
+        menu.addItem(item)
+    }
+
+    @objc private func customWorkIntervalSelected() { showCustomDuration(isWorkInterval: true) }
+    @objc private func customBreakDurationSelected() { showCustomDuration(isWorkInterval: false) }
+
+    private func showCustomDuration(isWorkInterval: Bool) {
+        guard !breakManager.isSyncedSession else { return }
+        DispatchQueue.main.async {
+            self.customDurationWindow?.close()
+            let close = { [weak self] in
+                self?.customDurationWindow?.close()
+                self?.customDurationWindow = nil
+            }
+            let view = CustomDurationView(
+                title: isWorkInterval ? "Custom Work Interval" : "Custom Break Duration",
+                explanation: isWorkInterval ? "Time to focus between breaks." : "Time to rest during each break.",
+                seconds: Int(isWorkInterval ? self.breakManager.workInterval : self.breakManager.breakDuration),
+                onSave: { [weak self] seconds in
+                    guard let self else { return }
+                    // A session may have been joined while this editor was open.
+                    if !self.breakManager.isSyncedSession {
+                        if isWorkInterval { self.breakManager.workInterval = Double(seconds) }
+                        else { self.breakManager.breakDuration = Double(seconds) }
+                        self.buildMenu()
+                        self.updateStatusItemLabel()
+                    }
+                    close()
+                },
+                onCancel: close
+            )
+            let window = NSWindow(contentViewController: NSHostingController(rootView: view))
+            window.styleMask = [.titled, .closable, .fullSizeContentView]
+            window.titlebarAppearsTransparent = true
+            window.titleVisibility = .hidden
+            window.isReleasedWhenClosed = false
+            window.isOpaque = false
+            window.backgroundColor = .clear
+            self.customDurationWindow = window
+            NSApp.activate(ignoringOtherApps: true)
+            self.centerWindow(window)
+            window.makeKeyAndOrderFront(nil)
+        }
+    }
+
     private func addIntervalItem(to menu: NSMenu, title: String, value: Double, current: Double) {
         let item = NSMenuItem(title: title, action: #selector(workIntervalSelected(_:)), keyEquivalent: "")
         item.target = self
@@ -418,9 +476,11 @@ class MenuManager: NSObject, NSMenuDelegate {
             
             let view = JoinSessionView(
                 onJoin: { [weak self] code in
-                    self?.breakManager.joinSession(code: code)
+                    guard self?.breakManager.joinSession(code: code) == true else { return false }
                     self?.sessionDialogWindow?.close()
                     self?.sessionDialogWindow = nil
+                    self?.buildMenu()
+                    return true
                 },
                 onCancel: { [weak self] in
                     self?.sessionDialogWindow?.close()
@@ -527,14 +587,7 @@ class MenuManager: NSObject, NSMenuDelegate {
     /// Formats a duration into a human-friendly string rounded to the nearest 15 minutes.
     /// Examples: 3600 → "1h", 5400 → "1h 30m", 1800 → "30m", 60 → "1m".
     private func formatFriendlyDuration(_ seconds: TimeInterval) -> String {
-        let totalMinutes = Int(seconds.rounded()) / 60
-        let hours = totalMinutes / 60
-        let minutes = totalMinutes % 60
-        
-        if hours > 0 && minutes > 0 { return "\(hours)h \(minutes)m" }
-        if hours > 0               { return "\(hours)h" }
-        if minutes > 0             { return "\(minutes)m" }
-        return "\(Int(seconds.rounded()))s"
+        DurationValue.label(Int(seconds.rounded()))
     }
     
     private func timeFormatted(_ totalSeconds: Int) -> String {

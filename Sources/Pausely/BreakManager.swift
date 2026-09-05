@@ -1,4 +1,5 @@
 import Foundation
+import PauselyCore
 import Combine
 import SwiftUI
 
@@ -42,8 +43,8 @@ class BreakManager: ObservableObject {
     // Configurations
     @Published var workInterval: TimeInterval = AppSettings.shared.workInterval {
         didSet {
-            AppSettings.shared.workInterval = workInterval
             if !isApplyingSync {
+                AppSettings.shared.workInterval = workInterval
                 isSyncedSession = false
             }
             if status == .working {
@@ -53,8 +54,8 @@ class BreakManager: ObservableObject {
     }
     @Published var breakDuration: TimeInterval = AppSettings.shared.breakDuration {
         didSet {
-            AppSettings.shared.breakDuration = breakDuration
             if !isApplyingSync {
+                AppSettings.shared.breakDuration = breakDuration
                 isSyncedSession = false
             }
             if status == .inBreak {
@@ -139,9 +140,8 @@ class BreakManager: ObservableObject {
     private func tick() {
         // Handle intermission countdown independently
         if isInIntermission {
-            if intermissionTimeRemaining > 0 {
-                intermissionTimeRemaining -= 1
-            } else {
+            intermissionTimeRemaining = TimerTiming.countdown(intermissionTimeRemaining)
+            if intermissionTimeRemaining == 0 {
                 endIntermission()
             }
         }
@@ -149,27 +149,16 @@ class BreakManager: ObservableObject {
         guard !isEnding else { return }
         
         if isSyncedSession {
-            let cycleDuration = workInterval + breakDuration
-            let elapsed = max(0, Date().timeIntervalSince1970 - anchorTimestamp)
-            let currentCycleIndex = Int(elapsed / cycleDuration)
-            let cyclePosition = elapsed.truncatingRemainder(dividingBy: cycleDuration)
-            
-            var newStatus: BreakStatus = .working
-            var newTimeRemaining: Double = 0
-            
-            if cyclePosition < workInterval {
+            let position = TimerTiming.position(work: workInterval, rest: breakDuration,
+                                                anchor: anchorTimestamp, now: Date().timeIntervalSince1970)
+            let currentCycleIndex = position.cycle
+            var newStatus: BreakStatus = position.isBreak ? .inBreak : .working
+            var newTimeRemaining = Double(position.remaining)
+            if position.isBreak && skippedCycleIndices.contains(currentCycleIndex) {
                 newStatus = .working
-                newTimeRemaining = workInterval - cyclePosition
-            } else {
-                if skippedCycleIndices.contains(currentCycleIndex) {
-                    newStatus = .working
-                    newTimeRemaining = (cycleDuration - cyclePosition) + workInterval
-                } else {
-                    newStatus = .inBreak
-                    newTimeRemaining = cycleDuration - cyclePosition
-                }
+                newTimeRemaining += workInterval
             }
-            
+
             // Apply Snooze Override
             if let snoozeEnd = snoozeEndTime {
                 if Date() < snoozeEnd {
@@ -181,7 +170,7 @@ class BreakManager: ObservableObject {
                     if newStatus == .inBreak {
                         skippedCycleIndices.insert(currentCycleIndex)
                         newStatus = .working
-                        newTimeRemaining = (cycleDuration - cyclePosition) + workInterval
+                        newTimeRemaining = Double(position.remaining) + workInterval
                     }
                 }
             }
@@ -199,26 +188,14 @@ class BreakManager: ObservableObject {
             }
             
         } else {
-            if status == .paused {
-                // Count down the pause; resume automatically when it hits zero
-                if timeRemaining > 0 {
-                    timeRemaining -= 1
-                } else {
-                    resumeBreaks()
-                }
-            } else {
-                if timeRemaining > 0 {
-                    timeRemaining -= 1
-                } else {
-                    if status == .working {
-                        triggerBreak()
-                    } else {
-                        endBreak()
-                    }
-                }
+            timeRemaining = TimerTiming.countdown(timeRemaining)
+            if timeRemaining == 0 {
+                if status == .paused { resumeBreaks() }
+                else if status == .working { triggerBreak() }
+                else { endBreak() }
             }
         }
-        
+
         // Pre-fetch wallpaper ~30s before break for instant overlay presentation.
         // This replaces the old 24/7 periodic capture with a targeted on-demand fetch.
         if status == .working && timeRemaining == 30 && !isScreenLocked {
@@ -415,32 +392,10 @@ class BreakManager: ObservableObject {
         }
     }
     
-    private let base32Alphabet = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZ234567")
-    
-    private func encodeBase32(_ value: Int) -> String {
-        var result = ""
-        var temp = value
-        for _ in 0..<6 {
-            let index = temp & 0x1F
-            result.insert(base32Alphabet[index], at: result.startIndex)
-            temp >>= 5
-        }
-        return result
-    }
-
-    private func decodeBase32(_ string: String) -> Int? {
-        guard string.count == 6 else { return nil }
-        var result = 0
-        let upperString = string.uppercased()
-        for char in upperString {
-            guard let index = base32Alphabet.firstIndex(of: char) else { return nil }
-            result = (result << 5) | index
-        }
-        return result
-    }
-
     func generateSessionCode() -> String {
         if !isSyncedSession {
+            previousWorkInterval = workInterval
+            previousBreakDuration = breakDuration
             // Backdate the anchor so current timeRemaining is seamless
             if status == .working {
                 let elapsed = workInterval - TimeInterval(timeRemaining)
@@ -449,77 +404,28 @@ class BreakManager: ObservableObject {
                 let elapsed = (workInterval + breakDuration) - TimeInterval(timeRemaining)
                 anchorTimestamp = Date().timeIntervalSince1970 - elapsed
             }
+            anchorTimestamp = floor(anchorTimestamp)
             isSyncedSession = true
         }
         
-        let workIntervals: [TimeInterval] = [15, 600, 1200, 1800]
-        let breakDurations: [TimeInterval] = [5, 15, 20, 60]
-        
-        let wIndex = workIntervals.firstIndex(of: workInterval) ?? 2 // Default to 1200
-        let bIndex = breakDurations.firstIndex(of: breakDuration) ?? 2 // Default to 20
-        
-        let timestampModulo = Int(anchorTimestamp) % 4_194_304 // 22 bits
-        let combined: Int = (wIndex << 26) | (bIndex << 22) | timestampModulo
-        
-        return encodeBase32(combined)
+        return SessionCode.encode(work: Int(workInterval), rest: Int(breakDuration), anchor: anchorTimestamp)
     }
-    
-    func joinSession(code: String) {
-        let cleanCode = code.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        let workIntervals: [TimeInterval] = [15, 600, 1200, 1800]
-        let breakDurations: [TimeInterval] = [5, 15, 20, 60]
-        
-        var w: TimeInterval = 1200
-        var b: TimeInterval = 20
-        var a: TimeInterval = 0
-        
-        if cleanCode.count == 6, let combined = decodeBase32(cleanCode) {
-            let modulo = combined & 0x3FFFFF
-            let wIndex = (combined >> 26) & 0x0F
-            let bIndex = (combined >> 22) & 0x0F
-            
-            w = (wIndex >= 0 && wIndex < workIntervals.count) ? workIntervals[wIndex] : 1200
-            b = (bIndex >= 0 && bIndex < breakDurations.count) ? breakDurations[bIndex] : 20
-            
-            let current = Int(Date().timeIntervalSince1970)
-            let window = 4_194_304
-            let currentModulo = current % window
-            var diff = modulo - currentModulo
-            
-            if diff > window / 2 {
-                diff -= window
-            } else if diff < -window / 2 {
-                diff += window
-            }
-            
-            a = TimeInterval(current + diff)
-        } else if let data = Data(base64Encoded: cleanCode), let payload = String(data: data, encoding: .utf8) {
-            // Legacy Base64
-            let parts = payload.split(separator: ":")
-            guard parts.count == 3,
-                  let wLegacy = TimeInterval(parts[0]),
-                  let bLegacy = TimeInterval(parts[1]),
-                  let aLegacy = TimeInterval(parts[2]) else { return }
-            
-            w = wLegacy
-            b = bLegacy
-            a = aLegacy
-        } else {
-            return // Invalid code
-        }
-        
+
+    @discardableResult
+    func joinSession(code: String) -> Bool {
+        guard let schedule = SessionCode.decode(code, now: Date().timeIntervalSince1970) else { return false }
+
         if !isSyncedSession {
             previousWorkInterval = self.workInterval
             previousBreakDuration = self.breakDuration
         }
         
         isApplyingSync = true
-        self.workInterval = w
-        self.breakDuration = b
+        self.workInterval = Double(schedule.work)
+        self.breakDuration = Double(schedule.rest)
         isApplyingSync = false
         
-        self.anchorTimestamp = a
+        self.anchorTimestamp = schedule.anchor
         self.isSyncedSession = true
         self.skippedCycleIndices.removeAll()
         self.snoozeEndTime = nil
@@ -529,6 +435,9 @@ class BreakManager: ObservableObject {
         if self.status == .inBreak {
             self.overlayController.closeOverlays()
         }
+        status = .working
+        if !isScreenLocked { tick() }
+        return true
     }
     
     func leaveSession() {

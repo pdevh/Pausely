@@ -114,6 +114,11 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Run duration, session, persistence, and dialog tests
+        env:
+          PAUSELY_UI_SNAPSHOT_DIR: release-diagnostics-macos/ui
+        run: swift test
+
       - name: Prepare persistent macOS signing identity
         if: needs.metadata.outputs.signed == 'true'
         timeout-minutes: 3
