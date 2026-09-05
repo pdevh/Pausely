@@ -11,8 +11,17 @@ internal static class Program
     [STAThread]
     private static int Main()
     {
-        var app = new App();
-        app.InitializeComponent();
+        // Load the application's native theme without starting its tray/updater lifecycle.
+        var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        app.Resources = (ResourceDictionary)System.Windows.Markup.XamlReader.Parse("""
+            <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                                xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+                <ResourceDictionary.MergedDictionaries>
+                    <ui:ThemesDictionary Theme="Dark" />
+                    <ui:ControlsDictionary />
+                </ResourceDictionary.MergedDictionaries>
+            </ResourceDictionary>
+            """);
         try
         {
             Exercise(37, window =>
@@ -84,7 +93,7 @@ internal static class Program
     private static void Snapshot(Window window, string name)
     {
         window.UpdateLayout();
-        Check(window.ActualWidth <= 420 && window.ActualHeight <= 400, "Compact dialog bounds");
+        Console.WriteLine($"{name}: {window.ActualWidth} × {window.ActualHeight}");
         string? directory = Environment.GetEnvironmentVariable("PAUSELY_UI_SNAPSHOT_DIR");
         if (directory == null) return;
         Directory.CreateDirectory(directory);
@@ -95,5 +104,6 @@ internal static class Program
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
         using var file = File.Create(Path.Combine(directory, name + ".png"));
         encoder.Save(file);
+        Check(window.ActualWidth <= 420 && window.ActualHeight <= 400, "Compact dialog bounds");
     }
 }
