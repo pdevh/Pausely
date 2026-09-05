@@ -367,8 +367,7 @@ class MenuManager: NSObject, NSMenuDelegate {
                 self?.customDurationWindow = nil
             }
             let view = CustomDurationView(
-                title: isWorkInterval ? "Custom Work Interval" : "Custom Break Duration",
-                explanation: isWorkInterval ? "Time to focus between breaks." : "Time to rest during each break.",
+                title: isWorkInterval ? "Work interval" : "Break duration",
                 seconds: Int(isWorkInterval ? self.breakManager.workInterval : self.breakManager.breakDuration),
                 onSave: { [weak self] seconds in
                     guard let self else { return }

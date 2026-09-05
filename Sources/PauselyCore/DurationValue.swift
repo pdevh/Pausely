@@ -38,13 +38,16 @@ public enum DurationValue {
     }
 }
 
-/// The editor's only stored value is its text. Invalid drafts have no preview
-/// or adjustment value, so an old numeric value can never disagree with the field.
+/// The editable display is the only stored value, including invalid drafts.
 public struct DurationDraft {
     public var text: String
     public var seconds: Int? { DurationValue.parse(text) }
 
-    public init(seconds: Int) { text = String(seconds) }
+    public init(seconds: Int) { text = DurationValue.clock(seconds) }
+
+    public mutating func normalize() {
+        if let seconds { text = DurationValue.clock(seconds) }
+    }
 
     public func canAdjust(by delta: Int) -> Bool {
         guard let seconds else { return false }
@@ -53,6 +56,6 @@ public struct DurationDraft {
 
     public mutating func adjust(by delta: Int) {
         guard let seconds, canAdjust(by: delta) else { return }
-        text = String(seconds + delta)
+        text = DurationValue.clock(seconds + delta)
     }
 }

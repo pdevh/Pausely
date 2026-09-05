@@ -13,8 +13,9 @@ public partial class CustomDurationWindow : Wpf.Ui.Controls.FluentWindow
     {
         _draft = new(seconds);
         InitializeComponent();
-        Title = Heading.Text = isWorkInterval ? "Custom Work Interval" : "Custom Break Duration";
-        Explanation.Text = isWorkInterval ? "Time to focus between breaks." : "Time to rest during each break.";
+        Title = isWorkInterval ? "Work interval" : "Break duration";
+        Heading.Content = Title;
+        System.Windows.Automation.AutomationProperties.SetName(DurationInput, Title);
         DurationInput.Text = _draft.Text;
         Loaded += (_, _) => { DurationInput.Focus(); DurationInput.SelectAll(); };
     }
@@ -23,14 +24,19 @@ public partial class CustomDurationWindow : Wpf.Ui.Controls.FluentWindow
     {
         if (SaveButton == null) return;
         _draft.Text = DurationInput.Text;
-        Preview.Text = _draft.Seconds is int seconds ? DurationValue.Clock(seconds) : "–:––";
-        PreviewLabel.Text = _draft.Seconds is int value ? DurationValue.Label(value) : "Enter a valid duration";
         SaveButton.IsEnabled = _draft.Seconds.HasValue;
         Validation.Text = _draft.Seconds.HasValue
-            ? "From 1 second to 24 hours. Changes apply when saved."
-            : "Use a whole-second duration from 1 second to 24 hours.";
-        foreach (System.Windows.Controls.Button button in Adjustments.Children)
-            button.IsEnabled = _draft.CanAdjust(int.Parse((string)button.Tag));
+            ? "" : _draft.Text.Length == 0 ? "Enter seconds, m:ss, or h:mm:ss."
+            : "Enter seconds or h:mm:ss, from 1s to 24h.";
+        foreach (StackPanel group in Adjustments.Children)
+            foreach (System.Windows.Controls.Button button in ((StackPanel)group.Children[1]).Children)
+                button.IsEnabled = _draft.CanAdjust(int.Parse((string)button.Tag));
+    }
+
+    private void DurationInput_LostKeyboardFocus(object sender, System.Windows.Input.KeyboardFocusChangedEventArgs e)
+    {
+        _draft.Normalize();
+        DurationInput.Text = _draft.Text;
     }
 
     private void Adjust_Click(object sender, RoutedEventArgs e)

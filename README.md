@@ -24,7 +24,7 @@ server.
 In **Work Interval** or **Break Duration**, choose **Custom…** beneath the presets.
 Enter seconds (`37`), minutes and seconds (`2:37`), or hours, minutes and seconds
 (`1:02:37`). Each setting supports whole seconds from **1 second to 24 hours**.
-The live preview and **±1 sec / ±1 min** buttons use the same value as the input.
+The editable clock and **Hours / Minutes / Seconds** adjustment buttons share one value.
 Choose **Save** to apply it; **Cancel** or Escape keeps the previous setting.
 Custom values remain selected in the menu and are saved across app restarts.
 The same controls are available on macOS and Windows.

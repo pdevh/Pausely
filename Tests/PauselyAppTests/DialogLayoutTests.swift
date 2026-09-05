@@ -8,12 +8,12 @@ final class DialogLayoutTests: XCTestCase {
     func testNativeDialogsFitAndRender() async throws {
         _ = NSApplication.shared
         for appearance in [NSAppearance.Name.aqua, .darkAqua] {
-            try await snapshot(CustomDurationView(title: "Custom Work Interval",
-                explanation: "Time to focus between breaks.", seconds: 37,
+            try await snapshot(CustomDurationView(title: "Work interval", seconds: 37,
                 onSave: { _ in }, onCancel: {}), name: "custom-37-\(appearance.rawValue)", appearance: appearance)
-            try await snapshot(CustomDurationView(title: "Custom Break Duration",
-                explanation: "Time to rest during each break.", seconds: 86400,
+            try await snapshot(CustomDurationView(title: "Break duration", seconds: 86400,
                 onSave: { _ in }, onCancel: {}), name: "custom-24h-\(appearance.rawValue)", appearance: appearance)
+            try await snapshot(CustomDurationView(title: "Work interval", seconds: 3757,
+                onSave: { _ in }, onCancel: {}), name: "custom-hour-\(appearance.rawValue)", appearance: appearance)
             try await snapshot(JoinSessionView(), name: "join-\(appearance.rawValue)", appearance: appearance)
             try await snapshot(HostSessionView(code: "AAAAABBBBBB"), name: "host-custom-\(appearance.rawValue)", appearance: appearance)
         }
@@ -32,7 +32,7 @@ final class DialogLayoutTests: XCTestCase {
         controller.view.layoutSubtreeIfNeeded()
         let size = controller.view.fittingSize
         XCTAssertLessThanOrEqual(size.width, 520, name)
-        XCTAssertLessThanOrEqual(size.height, 650, name)
+        XCTAssertLessThanOrEqual(size.height, name.hasPrefix("custom-") ? 320 : 650, name)
         XCTAssertGreaterThan(size.height, 200, name)
         if let directory = ProcessInfo.processInfo.environment["PAUSELY_UI_SNAPSHOT_DIR"] {
             let url = URL(fileURLWithPath: directory, isDirectory: true)

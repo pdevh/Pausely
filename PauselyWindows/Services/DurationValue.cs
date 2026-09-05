@@ -42,14 +42,19 @@ internal static class DurationValue
 // All controls derive their value from the current text, including invalid drafts.
 internal sealed class DurationDraft(int seconds)
 {
-    internal string Text { get; set; } = seconds.ToString(CultureInfo.InvariantCulture);
+    internal string Text { get; set; } = DurationValue.Clock(seconds);
     internal int? Seconds => DurationValue.Parse(Text);
+
+    internal void Normalize()
+    {
+        if (Seconds is int value) Text = DurationValue.Clock(value);
+    }
 
     internal bool CanAdjust(int delta) => Seconds is int value && value + delta is >= 1 and <= DurationValue.Maximum;
 
     internal void Adjust(int delta)
     {
         if (Seconds is int value && CanAdjust(delta))
-            Text = (value + delta).ToString(CultureInfo.InvariantCulture);
+            Text = DurationValue.Clock(value + delta);
     }
 }

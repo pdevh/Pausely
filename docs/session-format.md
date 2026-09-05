@@ -71,9 +71,9 @@ synchronization, and exercise countdown/cycle boundaries.
 Before releasing, check on both desktops:
 
 - Open Custom from each menu; type `37`, `2:37`, and `24:00:00`, then use the
-  adjustment buttons. Preview and input must agree immediately.
+  adjustment buttons. The editable display must update immediately.
 - Clear the field or enter `0`, `1:60`, or `86401`. Save and adjustments must be
-  disabled and the previous preview must disappear.
+  disabled with inline input guidance.
 - Save and restart; the exact value and custom checkmark must survive. Cancel,
   Escape, and closing the editor must preserve the previous setting.
 - Host 37s work / 13s break; copy to the other platform, verify the preview, and

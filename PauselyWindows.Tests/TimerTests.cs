@@ -47,7 +47,7 @@ internal static class TimerTests
         var draft = new DurationDraft(20) { Text = "0:37" };
         Assert.True(draft.Seconds == 37);
         draft.Adjust(60);
-        Assert.Equal("97", draft.Text);
+        Assert.Equal("1:37", draft.Text);
         Assert.True(draft.Seconds == 97);
         draft.Adjust(-1);
         Assert.True(draft.Seconds == 96);
@@ -62,6 +62,31 @@ internal static class TimerTests
         draft.Text = "86400";
         draft.Adjust(1);
         Assert.True(draft.Seconds == 86400);
+    }
+
+    internal static void EditableClockAndHours()
+    {
+        var draft = new DurationDraft(3757);
+        Assert.Equal("1:02:37", draft.Text);
+        draft.Text = "3599";
+        draft.Normalize();
+        Assert.Equal("59:59", draft.Text);
+        draft.Adjust(1);
+        Assert.Equal("1:00:00", draft.Text);
+        draft.Adjust(3600);
+        Assert.Equal("2:00:00", draft.Text);
+        draft.Adjust(-3600);
+        Assert.True(draft.Seconds == 3600);
+        draft.Text = "1:60";
+        draft.Normalize();
+        Assert.Equal("1:60", draft.Text);
+        Assert.False(draft.CanAdjust(3600));
+        draft.Text = "24:00:00";
+        Assert.False(draft.CanAdjust(1));
+        Assert.False(draft.CanAdjust(60));
+        Assert.False(draft.CanAdjust(3600));
+        draft.Adjust(-1);
+        Assert.Equal("23:59:59", draft.Text);
     }
 
     internal static void CycleBoundaries()

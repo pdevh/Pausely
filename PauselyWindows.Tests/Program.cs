@@ -7,6 +7,7 @@ var tests = new (string Name, Action Body)[]
     ("custom settings persistence", TimerTests.SettingsPersistence),
     ("duration input and validation", TimerTests.InputAndFormatting),
     ("duration editor synchronization", TimerTests.EditorSynchronization),
+    ("editable clock and hour adjustments", TimerTests.EditableClockAndHours),
     ("second-accurate countdown and cycle boundaries", TimerTests.CycleBoundaries),
     ("cross-platform session vectors", TimerTests.CrossPlatformVectors),
     ("every custom second round-trips", TimerTests.EveryCustomSecond),

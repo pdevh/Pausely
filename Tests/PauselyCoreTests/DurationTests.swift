@@ -29,7 +29,7 @@ final class DurationTests: XCTestCase {
         draft.text = "0:37"
         XCTAssertEqual(draft.seconds, 37)
         draft.adjust(by: 60)
-        XCTAssertEqual(draft.text, "97")
+        XCTAssertEqual(draft.text, "1:37")
         XCTAssertEqual(draft.seconds, 97)
         draft.adjust(by: -1)
         XCTAssertEqual(draft.seconds, 96)
@@ -44,6 +44,30 @@ final class DurationTests: XCTestCase {
         draft.text = "86400"
         draft.adjust(by: 1)
         XCTAssertEqual(draft.seconds, 86400)
+    }
+
+    func testEditableClockAndHourAdjustments() {
+        var draft = DurationDraft(seconds: 3757)
+        XCTAssertEqual(draft.text, "1:02:37")
+        draft.text = "3599"
+        draft.normalize()
+        XCTAssertEqual(draft.text, "59:59")
+        draft.adjust(by: 1)
+        XCTAssertEqual(draft.text, "1:00:00")
+        draft.adjust(by: 3600)
+        XCTAssertEqual(draft.text, "2:00:00")
+        draft.adjust(by: -3600)
+        XCTAssertEqual(draft.seconds, 3600)
+        draft.text = "1:60"
+        draft.normalize()
+        XCTAssertEqual(draft.text, "1:60")
+        XCTAssertFalse(draft.canAdjust(by: 3600))
+        draft.text = "24:00:00"
+        XCTAssertFalse(draft.canAdjust(by: 1))
+        XCTAssertFalse(draft.canAdjust(by: 60))
+        XCTAssertFalse(draft.canAdjust(by: 3600))
+        draft.adjust(by: -1)
+        XCTAssertEqual(draft.text, "23:59:59")
     }
 
     func testSecondAccurateCountdownAndCycleBoundaries() {
