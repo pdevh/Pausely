@@ -2,7 +2,9 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
+using Application = System.Windows.Application;
+using Button = System.Windows.Controls.Button;
+using TextBox = System.Windows.Controls.TextBox;
 using System.Windows.Threading;
 using PauselyWindows;
 
@@ -97,13 +99,16 @@ internal static class Program
         string? directory = Environment.GetEnvironmentVariable("PAUSELY_UI_SNAPSHOT_DIR");
         if (directory == null) return;
         Directory.CreateDirectory(directory);
-        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(window.ActualWidth),
-            (int)Math.Ceiling(window.ActualHeight), 96, 96, PixelFormats.Pbgra32);
-        bitmap.Render(window);
-        var encoder = new PngBitmapEncoder();
-        encoder.Frames.Add(BitmapFrame.Create(bitmap));
-        using var file = File.Create(Path.Combine(directory, name + ".png"));
-        encoder.Save(file);
+        // Capture the composed native window, including Mica and system controls.
+        window.Dispatcher.Invoke(() => { }, DispatcherPriority.ContextIdle);
+        System.Threading.Thread.Sleep(150);
+        var origin = window.PointToScreen(new System.Windows.Point(0, 0));
+        var dpi = VisualTreeHelper.GetDpi(window);
+        using var bitmap = new System.Drawing.Bitmap((int)Math.Ceiling(window.ActualWidth * dpi.DpiScaleX),
+            (int)Math.Ceiling(window.ActualHeight * dpi.DpiScaleY));
+        using (var graphics = System.Drawing.Graphics.FromImage(bitmap))
+            graphics.CopyFromScreen((int)origin.X, (int)origin.Y, 0, 0, bitmap.Size);
+        bitmap.Save(Path.Combine(directory, name + ".png"), System.Drawing.Imaging.ImageFormat.Png);
         Check(window.ActualWidth <= 420 && window.ActualHeight <= 400, "Compact dialog bounds");
     }
 }
